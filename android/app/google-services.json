@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "510487111044",
+    "project_id": "aliali-18b28",
+    "storage_bucket": "aliali-18b28.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:510487111044:android:aa1bb5fce853ec3b6d69d1",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFjKJnil6wYeYD7QY0ajl8WQSSll3BIy4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+
