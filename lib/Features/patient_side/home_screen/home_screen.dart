@@ -1,155 +1,481 @@
+// HomeScreen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/Features/patient_side/home_screen/model/doctor_specialist.dart';
-// مش ضروري تستورد موديل الريكومينديشن هنا لو مش هتستخدم Lists محلية
-// import 'package:health_care_app/Features/patient_side/home_screen/model/recomendation_doctor.dart';
-import 'package:flutter_application_2/Features/patient_side/home_screen/widget/CarsouseSlide.dart';
-import 'package:flutter_application_2/Features/patient_side/home_screen/widget/DoctorSpecialist.dart';
-import 'package:flutter_application_2/Features/patient_side/home_screen/widget/RecomendationDoc.dart';
 import 'package:flutter_application_2/Features/patient_side/home_screen/widget/header.dart';
-import 'package:flutter_application_2/Features/patient_side/recommendation_doctor/recommendation.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
-import 'package:flutter_application_2/core/constants/sizes.dart';
-import 'package:flutter_application_2/shared/widgets/sea_all.dart';
+import 'package:flutter_application_2/services/notification_services.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+const HomeScreen({Key? key}) : super(key: key);
 
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
+@override
+State<HomeScreen> createState() => _PatientDashboardUIState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  //    scroll automatic
-  final List<String> imageView = [
-    "lib/images/ListView3.png",
-    "lib/images/ListView1.jpeg",
-    "lib/images/listView2.jpeg",
-    "lib/images/listView4.jpeg",
-  ];
+class _PatientDashboardUIState extends State<HomeScreen> {
+List<Map<String, dynamic>> medications = [
+{
+"id": 1,
+"name": "Aspirin",
+"dosage": "100mg",
+"frequency": "Once daily",
+"time": "08:00 AM",
+"reminder": true
+},
+{
+"id": 2,
+"name": "Metformin",
+"dosage": "500mg",
+"frequency": "Twice daily",
+"time": "08:00 AM, 08:00 PM",
+"reminder": true
+},
+{
+"id": 3,
+"name": "Lisinopril",
+"dosage": "10mg",
+"frequency": "Once daily",
+"time": "09:00 AM",
+"reminder": false
+},
+{
+"id": 4,
+"name": "Atorvastatin",
+"dosage": "20mg",
+"frequency": "Once daily",
+"time": "10:00 PM",
+"reminder": true
+},
+];
 
-  // search
-  final TextEditingController searchController = TextEditingController();
-  String searchQuery = '';
+List<Map<String, String>> upcomingReminders = [];
 
-  @override
-  Widget build(BuildContext context) {
-    return
-     Scaffold(
-      backgroundColor: Colors.white,
-      body: 
-      SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: SingleChildScrollView(
+@override
+void initState() {
+super.initState();
+// Initialize upcomingReminders based on active reminders
+for (var med in medications) {
+if (med["reminder"]) {
+final medFullName = "${med["name"]} ${med["dosage"]}";
+final times = (med["time"] as String).split(',');
+for (var t in times) {
+upcomingReminders.add({"time": t.trim(), "medication": medFullName});
+}
+}
+}
+}
+
+void toggleReminder(int id) {
+setState(() {
+final index = medications.indexWhere((med) => med["id"] == id);
+final med = medications[index];
+med["reminder"] = !(med["reminder"] as bool);
+
+  final medFullName = "${med["name"]} ${med["dosage"]}";
+
+  if (med["reminder"] == false) {
+    upcomingReminders.removeWhere((r) => r["medication"] == medFullName);
+    NotificationService.cancelNotification(med["id"]);
+  } else {
+    final times = (med["time"] as String).split(',');
+    for (var t in times) {
+      upcomingReminders.add({"time": t.trim(), "medication": medFullName});
+
+      // تحويل الوقت إلى TZDateTime
+      final parts = t.trim().split(RegExp(r'[: ]'));
+      int hour = int.parse(parts[0]);
+      int minute = int.parse(parts[1]);
+      final ampm = parts[2];
+      if (ampm.toUpperCase() == 'PM' && hour != 12) hour += 12;
+      if (ampm.toUpperCase() == 'AM' && hour == 12) hour = 0;
+
+      DateTime now = DateTime.now();
+      DateTime scheduledDate =
+          DateTime(now.year, now.month, now.day, hour, minute);
+      if (scheduledDate.isBefore(now)) {
+        scheduledDate = scheduledDate.add(const Duration(days: 1));
+      }
+
+      NotificationService.showScheduledNotification(
+        id: med["id"],
+        title: 'Reminder: ${med["name"]}',
+        body: 'Time to take ${med["dosage"]}',
+        scheduledTime: tz.TZDateTime.from(scheduledDate, tz.local),
+      );
+    }
+  }
+});
+
+}
+
+void openAddReminderDialog() {
+String medName = "";
+String dosage = "";
+String time = "";
+
+showDialog(
+  context: context,
+  builder: (context) {
+    return AlertDialog(
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text("Add New Reminder"),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            decoration: InputDecoration(labelText: "Medication Name"),
+            onChanged: (value) => medName = value,
+          ),
+          TextField(
+            decoration: InputDecoration(labelText: "Dosage"),
+            onChanged: (value) => dosage = value,
+          ),
+          TextField(
+            decoration:
+                InputDecoration(labelText: "Time (e.g. 08:00 AM)"),
+            onChanged: (value) => time = value,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          style: TextButton.styleFrom(
+              backgroundColor: Colors.grey[300],
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12))),
+          child: Text("Cancel", style: TextStyle(color: Colors.black)),
+          onPressed: () => Navigator.pop(context),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.blueColor,
+          ),
+          child: Text("Add"),
+          onPressed: () {
+            if (medName.isNotEmpty &&
+                dosage.isNotEmpty &&
+                time.isNotEmpty) {
+              setState(() {
+                final newMed = {
+                  "id": DateTime.now().millisecondsSinceEpoch,
+                  "name": medName,
+                  "dosage": dosage,
+                  "frequency": "Once daily",
+                  "time": time,
+                  "reminder": true,
+                };
+                medications.add(newMed);
+                upcomingReminders.add({
+                  "time": time,
+                  "medication": "$medName $dosage"
+                });
+
+                // Schedule notification
+                final parts = time.split(RegExp(r'[: ]'));
+                int hour = int.parse(parts[0]);
+                int minute = int.parse(parts[1]);
+                final ampm = parts[2];
+                if (ampm.toUpperCase() == 'PM' && hour != 12) hour += 12;
+                if (ampm.toUpperCase() == 'AM' && hour == 12) hour = 0;
+
+                DateTime now = DateTime.now();
+                DateTime scheduledDate =
+                    DateTime(now.year, now.month, now.day, hour, minute);
+                if (scheduledDate.isBefore(now)) {
+                  scheduledDate = scheduledDate.add(const Duration(days: 1));
+                }
+
+             NotificationService.showScheduledNotification(
+  id: (newMed["id"] as int),
+  title: 'Reminder: $medName',
+  body: 'Time to take $dosage',
+  scheduledTime: tz.TZDateTime.from(scheduledDate, tz.local),
+);
+  });
+            }
+            Navigator.pop(context);
+          },
+        ),
+      ],
+    );
+  },
+);
+
+}
+
+Widget dismissibleMedicationCard(Map<String, dynamic> med) {
+return Dismissible(
+key: Key(med["id"].toString()),
+direction: DismissDirection.endToStart,
+background: Container(
+padding: EdgeInsets.only(right: 20),
+alignment: Alignment.centerRight,
+color: Colors.red,
+child: Icon(Icons.delete, color: Colors.white, size: 30),
+),
+confirmDismiss: (direction) async {
+return await showDialog(
+context: context,
+builder: (context) {
+return AlertDialog(
+shape: RoundedRectangleBorder(
+borderRadius: BorderRadius.circular(12)),
+title: Text("Delete Reminder?"),
+content: Text("Are you sure you want to delete this reminder?"),
+actions: [
+TextButton(
+style: TextButton.styleFrom(
+backgroundColor: Colors.grey[300],
+shape: RoundedRectangleBorder(
+borderRadius: BorderRadius.circular(12))),
+child: Text("Cancel", style: TextStyle(color: Colors.black)),
+onPressed: () => Navigator.pop(context, false),
+),
+ElevatedButton(
+style: ElevatedButton.styleFrom(
+backgroundColor: AppColors.blueColor),
+child: Text("Delete",
+style: TextStyle(color: AppColors.whiteColor)),
+onPressed: () => Navigator.pop(context, true),
+),
+],
+);
+},
+);
+},
+onDismissed: (direction) {
+setState(() {
+medications.removeWhere((item) => item["id"] == med["id"]);
+upcomingReminders.removeWhere(
+(rem) => rem["medication"] == "${med["name"]} ${med["dosage"]}");
+NotificationService.cancelNotification(med["id"]);
+});
+},
+child: medicationCard(med),
+);
+}
+
+@override
+Widget build(BuildContext context) {
+final isMobile = MediaQuery.of(context).size.width < 600;
+
+return Scaffold(
+  backgroundColor: const Color.fromARGB(255, 249, 249, 249),
+  body: SingleChildScrollView(
+    padding: const EdgeInsets.all(12),
+    child: Column(
+      children: [
+        SizedBox(height: 50),
+        HeaderWidget(),
+        // Medications List
+        Card(
+          color: Colors.white,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // header
-                const HeaderWidget(),
-                // SizedBox(height: AppFonts.spaceMedium),
-                // CarsouseSlide(imageView: imageView),
-
-              //   // search
-              //   SizedBox(height: AppFonts.spaceMedium),
-              //   Divider(color: AppColors.backgroundGrey, thickness: 1.25),
-              //   SizedBox(height: AppFonts.spaceSmall),
-
-              //   TextField(
-              //     controller: searchController,
-              //     decoration: InputDecoration(
-              //       hint: Text(
-              //         'Search by name or specialist',
-              //         style: TextStyle(
-              //           color: AppColors.greyColor.withOpacity(0.8),
-              //           fontSize: 16,
-              //         ),
-              //       ),
-              //       prefixIcon: const Icon(Icons.search),
-              //       border: OutlineInputBorder(
-              //         borderRadius: BorderRadius.circular(12),
-              //         borderSide: BorderSide(
-              //           color: AppColors.greyColor,
-              //           width: 1,
-              //         ),
-              //       ),
-              //       focusedBorder: OutlineInputBorder(
-              //         borderRadius: BorderRadius.circular(12),
-              //         borderSide: BorderSide(
-              //           color: AppColors.greyColor,
-              //           width: 1,
-              //         ),
-              //       ),
-              //       enabledBorder: OutlineInputBorder(
-              //         borderRadius: BorderRadius.circular(12),
-              //         borderSide: BorderSide(
-              //           color: AppColors.greyColor,
-              //           width: 1,
-              //         ),
-              //       ),
-              //     ),
-              //     onChanged: (value) => setState(() => searchQuery = value),
-              //     onSubmitted: (value) {
-              //       setState(() => searchQuery = value);
-              //       searchController.clear();
-              //     },
-              //   ),
-
-              //   SizedBox(height: AppFonts.spaceSmall),
-              //   Divider(color: AppColors.backgroundGrey, thickness: 1.25),
-              //   SizedBox(height: AppFonts.spaceSmall),
-
-              //   // Doctor Speciality
-              //   DoctorSpecialistWidget(
-              //     items: items,
-              //     onSelect: (spec) {
-              //       Navigator.push(
-              //         context,
-              //         MaterialPageRoute(
-              //           builder: (_) => Recommendation(initialSpec: spec),
-              //         ),
-              //       );
-              //     },
-              //   ),
-              //   // Recommendation doctor
-              //   Column(
-              //     children: [
-              //       Row(
-              //         children: [
-              //           Text(
-              //             "Recommendation Doctor",
-              //             style: AppFonts.bodyLarge.copyWith(
-              //               color: AppColors.textColorBlack,
-              //             ),
-              //           ),
-              //           const Spacer(),
-              //           SEAALL(
-              //             onTap: () {
-              //               // افتح صفحة الـ See All واعمل فيها نفس فكرة الـ Stream + فلترة بالسيرش
-              //               Navigator.push(
-              //                 context,
-              //                 MaterialPageRoute(
-              //                   builder: (context) => Recommendation(
-              //                     initialQuery: searchQuery,
-              //                     initialSpec:
-              //                         '', // عدّل صفحة Recommendation تقبل ده
-              //                   ),
-              //                 ),
-              //               );
-              //             },
-              //           ),
-              //         ],
-              //       ),
-              //       SizedBox(height: AppFonts.spaceSmall),
-
-              //       // بنمرر الـ searchQuery اختيارياً للفلترة داخل الويجد
-              //       RecomendationDoc(searchQuery: searchQuery),
-              //     ],
-            ],
+                Row(
+                  children: [
+                    Text("Medications",
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    Spacer(),
+                    ElevatedButton(
+                      onPressed: () => openAddReminderDialog(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.blueColor,
+                        padding: const EdgeInsets.all(10),
+                        elevation: 4,
+                      ),
+                      child: const Icon(
+                        Icons.add,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                  ],
+                ),
+                const Text("Manage your medications and reminders",
+                    style: TextStyle(fontSize: 12)),
+                const SizedBox(height: 11),
+                ...medications.map((med) => dismissibleMedicationCard(med)),
+              ],
             ),
           ),
         ),
-      ),
-    );
-  
-  }
+        const SizedBox(height: 12),
+        // Upcoming Reminders
+        Card(
+          color: Colors.white,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Upcoming Reminders",
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                upcomingReminders.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Center(
+                          child: Text(
+                            "No Upcoming Reminders",
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      )
+                    : Column(
+                        children: upcomingReminders
+                            .map((reminder) => reminderCard(reminder))
+                            .toList(),
+                      ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Quick Stats
+        Card(
+          color: Colors.white,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Quick Stats",
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                statRow("Active Medications", medications.length.toString(),
+                    Colors.blue),
+                statRow(
+                    "Daily Reminders",
+                    medications
+                        .where((m) => m["reminder"])
+                        .length
+                        .toString(),
+                    Colors.green),
+                statRow("Weekly Adherence", "95%", Colors.amber),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+);
+
+}
+
+Widget medicationCard(Map<String, dynamic> med) {
+return Card(
+color: Colors.white,
+margin: const EdgeInsets.symmetric(vertical: 4),
+child: Padding(
+padding: const EdgeInsets.all(8),
+child: Row(
+children: [
+Expanded(
+child: Column(
+crossAxisAlignment: CrossAxisAlignment.start,
+children: [
+Row(
+children: [
+Text(
+med["name"],
+style: const TextStyle(fontWeight: FontWeight.bold),
+),
+const SizedBox(width: 10),
+if (med["reminder"])
+Container(
+width: 117,
+height: 23,
+decoration: BoxDecoration(
+color: AppColors.blueColor,
+borderRadius: BorderRadius.circular(9),
+),
+child: Center(
+child: Text(
+'Active Reminder',
+style: TextStyle(
+fontSize: 13,
+fontWeight: FontWeight.bold,
+color: Colors.white,
+),
+),
+),
+),
+],
+),
+Text("Dosage: ${med["dosage"]}"),
+Text("Frequency: ${med["frequency"]}"),
+Text("Time: ${med["time"]}"),
+]),
+),
+Column(
+children: [
+Row(
+children: [
+Switch(
+inactiveTrackColor:
+const Color.fromARGB(255, 249, 249, 249),
+activeTrackColor: AppColors.blueColor,
+activeColor: AppColors.whiteColor,
+value: med["reminder"],
+onChanged: (_) => toggleReminder(med["id"]),
+),
+const Icon(Icons.notifications_outlined,
+size: 20, color: Colors.grey),
+],
+),
+],
+)
+],
+),
+),
+);
+}
+
+Widget reminderCard(Map<String, String> reminder) {
+return Card(
+margin: const EdgeInsets.symmetric(vertical: 4),
+color: Colors.blue[50],
+child: ListTile(
+leading: const CircleAvatar(
+backgroundColor: Colors.blue,
+child: Icon(Icons.notifications, color: Colors.white),
+),
+title: Text(reminder["medication"]!),
+subtitle: Text(reminder["time"]!),
+),
+);
+}
+
+Widget statRow(String title, String value, Color color) {
+return Padding(
+padding: const EdgeInsets.symmetric(vertical: 4),
+child: Row(
+mainAxisAlignment: MainAxisAlignment.spaceBetween,
+children: [
+Text(title),
+Container(
+padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+decoration: BoxDecoration(
+color: color,
+borderRadius: BorderRadius.circular(12),
+),
+child: Text(value, style: const TextStyle(color: Colors.white)),
+)
+],
+),
+);
+}
 }

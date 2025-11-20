@@ -62,7 +62,8 @@ class _HeaderWidgetState extends State<HeaderWidget> {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 20),
-      child: Row(
+      child: 
+      Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // 👋 الترحيب بالمستخدم (UI)

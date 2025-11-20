@@ -207,11 +207,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 );
                               }
-                              snackBarMessage(
-                                context,
-                                "Sign in successfully",
-                                color: Colors.green,
-                              );
+                          ScaffoldMessenger.of(context).showSnackBar(
+  SnackBar(
+    content: const Text("Sign in successfully"),
+    backgroundColor: AppColors.blueColor,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16), // هنا تحدد مدى استدارة الحواف
+    ),
+    behavior: SnackBarBehavior.floating, // لكي يظهر فوق المحتوى ويظهر الحواف المدورة
+    margin: const EdgeInsets.all(12), // لإعطاء مسافة حول الـ SnackBar
+  ),
+);
       
                               
                             } on FirebaseAuthException catch (e) {

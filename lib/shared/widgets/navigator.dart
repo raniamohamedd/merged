@@ -27,7 +27,7 @@ class _NavigationScreenState extends State<NavigationnScreen> {
     Scaffold(), //2
     // ChatScreen(), // 3
     SearchScreen(),
-    ProfilePatientScreen(), 
+    ProfilePatientScreen( ), 
 
 
   ];
@@ -63,8 +63,8 @@ class _NavigationScreenState extends State<NavigationnScreen> {
         borderColor: Colors.black,
         
         icons: [
+           Icons.home,
            Icons.description_outlined,
-           Icons.calendar_month_sharp,
           CupertinoIcons.search,
           CupertinoIcons.profile_circled,
         ],
