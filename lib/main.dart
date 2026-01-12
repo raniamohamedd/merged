@@ -13,7 +13,6 @@ options: DefaultFirebaseOptions.currentPlatform,
 
 await NotificationService.init();
 
-// تجربة الإشعار فور التشغيل
 await NotificationService.showTestNotification();
 
 runApp(const MyApp());

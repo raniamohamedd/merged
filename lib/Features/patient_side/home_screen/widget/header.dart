@@ -60,7 +60,8 @@ class _HeaderWidgetState extends State<HeaderWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return 
+    Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 20),
       child: 
       Row(

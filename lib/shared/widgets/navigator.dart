@@ -23,11 +23,11 @@ class _NavigationScreenState extends State<NavigationnScreen> {
 
   List<Widget> pages = [
     HomeScreen(), // 0
-    CalenderScreen(), // 1
+    Reportscreen(), // 1
     Scaffold(), //2
     // ChatScreen(), // 3
-    SearchScreen(),
-    ProfilePatientScreen( ), 
+    DoctorSearchPage(),
+    PatientProfilePage(userEmail: 'raniamohamed@gmail.com', onBack: () {  }, ), 
 
 
   ];

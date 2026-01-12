@@ -48,13 +48,30 @@ class FirestoreService {
         .set(patient.toMap());
   }
 
-  Future<UserModel> getUser(String userId) async {
-    final doc = await _firestore.collection('users').doc(userId).get();
-    if (!doc.exists || doc.data() == null) {
-      throw Exception('User not found: $userId');
-    }
-    return UserModel.fromMap(doc.data()!,doc.id);
+Future<UserModel> getUser(String userId) async {
+  final docRef = _firestore.collection('users').doc(userId);
+  final doc = await docRef.get();
+
+  if (!doc.exists || doc.data() == null) {
+    // المستند غير موجود → أنشئ مستند افتراضي
+    final defaultUser = UserModel(
+      user_id: userId,
+      name: "New User",
+      email: "", // ممكن تضيف البريد من Firebase Auth
+      password: "",
+      phoneNum: 0,
+      image: "lib/images/profile.png",
+      gender: "",
+      role: "Patient",
+    );
+
+    await docRef.set(defaultUser.toMap());
+    return defaultUser;
   }
+
+  return UserModel.fromMap(doc.data()!, doc.id);
+}
+
   
   Future<DoctorModel> getDoctor(String docId) async {
     final doc = await _firestore.collection('doctors').doc(docId).get();
