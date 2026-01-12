@@ -1,5 +1,6 @@
 // HomeScreen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/Features/patient_side/home_screen/medication_info_screen.dart';
 import 'package:flutter_application_2/Features/patient_side/home_screen/widget/header.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/services/notification_services.dart';
@@ -107,101 +108,177 @@ med["reminder"] = !(med["reminder"] as bool);
 });
 
 }
+void openManualAddDialog() {
+  String medName = "";
+  String dosage = "";
+  String time = "";
 
-void openAddReminderDialog() {
-String medName = "";
-String dosage = "";
-String time = "";
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
+        title: const Text("Add New Reminder"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              decoration:
+                  const InputDecoration(labelText: "Medication Name"),
+              onChanged: (value) => medName = value,
+            ),
+            TextField(
+              decoration: const InputDecoration(labelText: "Dosage"),
+              onChanged: (value) => dosage = value,
+            ),
+            TextField(
+              decoration: const InputDecoration(
+                  labelText: "Time (e.g. 08:00 AM)"),
+              onChanged: (value) => time = value,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: const Text("Cancel"),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.blueColor),
+            child: const Text("Add"),
+            onPressed: () {
+              if (medName.isNotEmpty &&
+                  dosage.isNotEmpty &&
+                  time.isNotEmpty) {
+                setState(() {
+                  medications.add({
+                    "id": DateTime.now().millisecondsSinceEpoch,
+                    "name": medName,
+                    "dosage": dosage,
+                    "frequency": "Once daily",
+                    "time": time,
+                    "reminder": true,
+                  });
 
-showDialog(
-  context: context,
-  builder: (context) {
-    return AlertDialog(
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text("Add New Reminder"),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            decoration: InputDecoration(labelText: "Medication Name"),
-            onChanged: (value) => medName = value,
-          ),
-          TextField(
-            decoration: InputDecoration(labelText: "Dosage"),
-            onChanged: (value) => dosage = value,
-          ),
-          TextField(
-            decoration:
-                InputDecoration(labelText: "Time (e.g. 08:00 AM)"),
-            onChanged: (value) => time = value,
+                  upcomingReminders.add({
+                    "time": time,
+                    "medication": "$medName $dosage"
+                  });
+                });
+              }
+              Navigator.pop(context);
+            },
           ),
         ],
-      ),
-      actions: [
-        TextButton(
-          style: TextButton.styleFrom(
-              backgroundColor: Colors.grey[300],
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12))),
-          child: Text("Cancel", style: TextStyle(color: Colors.black)),
-          onPressed: () => Navigator.pop(context),
+      );
+    },
+  );
+}
+void openScanMedicationDialog() {
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
+        title: const Text("Scanning Medication"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children:  [
+            Icon(Icons.medical_services,
+                size: 60, color: AppColors.blueColor),
+            SizedBox(height: 15),
+            Text("Analyzing image using AI...",
+                style: TextStyle(fontSize: 14)),
+            SizedBox(height: 15),
+            CircularProgressIndicator(),
+          ],
         ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.blueColor,
+      );
+    },
+  );
+
+  /// ⏳ Fake AI Delay
+  Future.delayed(const Duration(seconds: 2), () {
+    Navigator.pop(context);
+
+    /// Result Dialog
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+          title: const Text("Medication Detected"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text("Name: Panadol"),
+              Text("Dosage: 500 mg"),
+              Text("Usage: Pain relief & fever"),
+            ],
           ),
-          child: Text("Add"),
-          onPressed: () {
-            if (medName.isNotEmpty &&
-                dosage.isNotEmpty &&
-                time.isNotEmpty) {
-              setState(() {
-                final newMed = {
-                  "id": DateTime.now().millisecondsSinceEpoch,
-                  "name": medName,
-                  "dosage": dosage,
-                  "frequency": "Once daily",
-                  "time": time,
-                  "reminder": true,
-                };
-                medications.add(newMed);
-                upcomingReminders.add({
-                  "time": time,
-                  "medication": "$medName $dosage"
-                });
-
-                // Schedule notification
-                final parts = time.split(RegExp(r'[: ]'));
-                int hour = int.parse(parts[0]);
-                int minute = int.parse(parts[1]);
-                final ampm = parts[2];
-                if (ampm.toUpperCase() == 'PM' && hour != 12) hour += 12;
-                if (ampm.toUpperCase() == 'AM' && hour == 12) hour = 0;
-
-                DateTime now = DateTime.now();
-                DateTime scheduledDate =
-                    DateTime(now.year, now.month, now.day, hour, minute);
-                if (scheduledDate.isBefore(now)) {
-                  scheduledDate = scheduledDate.add(const Duration(days: 1));
-                }
-
-             NotificationService.showScheduledNotification(
-  id: (newMed["id"] as int),
-  title: 'Reminder: $medName',
-  body: 'Time to take $dosage',
-  scheduledTime: tz.TZDateTime.from(scheduledDate, tz.local),
-);
-  });
-            }
-            Navigator.pop(context);
-          },
-        ),
-      ],
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.blueColor),
+              child: const Text("Add Reminder"),
+              onPressed: () {
+                Navigator.pop(context);
+                openManualAddDialog();
+              },
+            ),
+          ],
+        );
+      },
     );
-  },
-);
-
+  });
+}
+void openAddReminderDialog() {
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
+        title: const Text("Add Medication"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: AppColors.blueColor.withOpacity(.1),
+                child:  Icon(Icons.camera_alt,
+                    color: AppColors.blueColor),
+              ),
+              title: const Text("Scan Medication"),
+              subtitle: const Text("Use camera & AI to detect medication"),
+              onTap: () {
+                Navigator.pop(context);
+                openScanMedicationDialog();
+              },
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: Colors.grey.withOpacity(.2),
+                child: const Icon(Icons.edit, color: Colors.black),
+              ),
+              title: const Text("Add Manually"),
+              subtitle: const Text("Enter medication details manually"),
+              onTap: () {
+                Navigator.pop(context);
+                openManualAddDialog();
+              },
+            ),
+          ],
+        ),
+      );
+    },
+  );
 }
 
 Widget dismissibleMedicationCard(Map<String, dynamic> med) {
@@ -395,25 +472,61 @@ style: const TextStyle(fontWeight: FontWeight.bold),
 ),
 const SizedBox(width: 10),
 if (med["reminder"])
-Container(
-width: 117,
-height: 23,
-decoration: BoxDecoration(
-color: AppColors.blueColor,
-borderRadius: BorderRadius.circular(9),
-),
-child: Center(
-child: Text(
-'Active Reminder',
-style: TextStyle(
-fontSize: 13,
-fontWeight: FontWeight.bold,
-color: Colors.white,
-),
-),
-),
-),
-],
+Row(
+  // mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  children: [
+    Container(
+      width: 110,
+      height: 23,
+      decoration: BoxDecoration(
+        color: AppColors.blueColor,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: const Center(
+        child: Text(
+          'Active Reminder',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    ),
+    SizedBox(width: 10,)
+,
+    // 🔹 Info Button
+   ],
+   
+),  GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const MedicationInfoScreen(),
+          ),
+        );
+      },
+      child: Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: AppColors.blueColor.withOpacity(.15),
+          shape: BoxShape.circle,
+        ),
+        child:  Center(
+          child: Text(
+            "i",
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppColors.blueColor,
+            ),
+          ),
+        ),
+      ),
+    ),
+ ],
 ),
 Text("Dosage: ${med["dosage"]}"),
 Text("Frequency: ${med["frequency"]}"),

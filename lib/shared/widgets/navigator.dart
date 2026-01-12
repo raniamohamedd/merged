@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chats_list_screen.dart' hide AppColors;
 import 'package:flutter_application_2/Features/patient_side/calender/calender_screen.dart';
 import 'package:flutter_application_2/Features/patient_side/chats/view/chats_list_screen.dart';
 import 'package:flutter_application_2/Features/patient_side/home_screen/home_screen.dart';
@@ -24,7 +25,7 @@ class _NavigationScreenState extends State<NavigationnScreen> {
   List<Widget> pages = [
     HomeScreen(), // 0
     Reportscreen(), // 1
-    Scaffold(), //2
+    ChatsListScreenDoctor(), //2
     // ChatScreen(), // 3
     DoctorSearchPage(),
     PatientProfilePage(userEmail: 'raniamohamed@gmail.com', onBack: () {  }, ), 
@@ -53,7 +54,7 @@ class _NavigationScreenState extends State<NavigationnScreen> {
             pageIndex = gapIndex;
           });
         },
-        child: Icon(Icons.add, color: Colors.white),
+        child: Icon(Icons.chat_bubble_outline_rounded, color: Colors.white),
         backgroundColor: AppColors.backgroundColorBlue,
       ),
       // عشان تيجي عندي ف النص

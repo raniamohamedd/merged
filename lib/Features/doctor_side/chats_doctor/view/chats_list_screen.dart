@@ -1,59 +1,108 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chat_details_screen.dart';
-import 'package:flutter_application_2/core/constants/colors.dart';
 
+// 🔹 Colors (لو عندك AppColors استخدميه بدل ده)
+class AppColors {
+  static const Color blueColor = Color(0xFF1976D2);
+  static const Color whiteColor = Colors.white;
+  static const Color greyColor = Colors.grey;
+  static const Color greenColor = Colors.green;
+}
+
+// 🔹 Model
+class DoctorChat {
+  final String name;
+  final String lastMessage;
+  final String time;
+  final String image;
+  final int unreadCount;
+
+  DoctorChat({
+    required this.name,
+    required this.lastMessage,
+    required this.time,
+    required this.image,
+    required this.unreadCount,
+  });
+}
+
+// 🔹 Static Data (4 Doctors)
+final List<DoctorChat> staticDoctors = [
+  DoctorChat(
+    name: "Dr. John Smith",
+    lastMessage: "Please take the medicine after meals",
+    time: "10:20 AM",
+    image: "lib/images/doc1(chat).jpg",
+    unreadCount: 1,
+  ),
+  DoctorChat(
+    name: "Dr. Emma Brown",
+    lastMessage: "Your test results look normal",
+    time: "09:45 AM",
+    image: "lib/images/doc2(chat).jpg",
+    unreadCount: 0,
+  ),
+  DoctorChat(
+    name: "Dr. Michael Lee",
+    lastMessage: "Don't forget your follow-up appointment",
+    time: "Yesterday",
+    image: "lib/images/doc3(chat).jpg",
+    unreadCount: 1,
+  ),
+  DoctorChat(
+    name: "Dr. Olivia Wilson",
+    lastMessage: "I have updated your prescription",
+    time: "Mon",
+    image: "lib/images/doc4(chat).jpg",
+    unreadCount: 3,
+  ),
+];
+
+// 🔹 Screen
 class ChatsListScreenDoctor extends StatefulWidget {
   const ChatsListScreenDoctor({super.key});
 
   @override
-  State<ChatsListScreenDoctor> createState() => _ChatsListScreenDoctorState();
+  State<ChatsListScreenDoctor> createState() =>
+      _ChatsListScreenDoctorState();
 }
 
 class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
-  User? currentUser;
   final TextEditingController _searchController = TextEditingController();
   String searchQuery = "";
 
   @override
-  void initState() {
-    super.initState();
-    currentUser = FirebaseAuth.instance.currentUser;
-  }
-
-  void _filterChats(String query) {
-    setState(() {
-      searchQuery = query.toLowerCase();
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (currentUser == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    final currentUserId = currentUser!.uid;
+    final filteredDoctors = staticDoctors
+        .where((d) =>
+            d.name.toLowerCase().contains(searchQuery.toLowerCase()))
+        .toList();
 
     return Scaffold(
       backgroundColor: AppColors.whiteColor,
-      appBar: AppBar(
-        backgroundColor: AppColors.whiteColor,
-        title: const Text(
-          "Chats",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-        ),
-        elevation: 0,
-        centerTitle: true,
-      ),
       body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16,),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const SizedBox(height:60),
 
+            // 🔹 Title
+            Center(
+              child: Text(
+                "Chats",
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.blueColor,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // 🔹 Search
             Container(
               decoration: BoxDecoration(
                 color: AppColors.greyColor.withOpacity(.1),
@@ -61,220 +110,101 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
               ),
               child: TextField(
                 controller: _searchController,
-                onChanged: _filterChats,
+                onChanged: (value) {
+                  setState(() {
+                    searchQuery = value;
+                  });
+                },
                 decoration: const InputDecoration(
                   hintText: "Search",
                   prefixIcon: Icon(CupertinoIcons.search),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 20),
+                  contentPadding:
+                      EdgeInsets.symmetric(vertical: 20),
                 ),
               ),
             ),
+
             const SizedBox(height: 20),
 
+            // 🔹 Active Now
             const Text(
               "Active Now",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+              style:
+                  TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
             ),
             const SizedBox(height: 12),
 
-
             SizedBox(
               height: 85,
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('chats')
-                    .where('doctorId', isEqualTo: currentUserId)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(child: Text("No active patients."));
-                  }
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: filteredDoctors.length,
+                itemBuilder: (context, index) {
+                  final doctor = filteredDoctors[index];
 
-                  final activeChats = snapshot.data!.docs.where((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    final name =
-                        (data['patientName'] ?? '').toString().toLowerCase();
-                    return name.contains(searchQuery);
-                  }).toList();
-
-                  return ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: activeChats.length,
-                    itemBuilder: (context, index) {
-                      final data =
-                          activeChats[index].data() as Map<String, dynamic>;
-                      final chatId = activeChats[index].id;
-                      final patientId = data['patientId'];
-
-                      return FutureBuilder<DocumentSnapshot>(
-                        future: FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(patientId)
-                            .get(),
-                        builder: (context, userSnapshot) {
-                          if (!userSnapshot.hasData) {
-                            return const SizedBox();
-                          }
-
-                          final userData =
-                              userSnapshot.data!.data() as Map<String, dynamic>;
-                          final patientName = userData['name'] ?? 'Unknown';
-                          final patientImage =
-                              userData['image'] ?? 'lib/images/patientt.png';
-
-                          return GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ChatsPageDoctor(
-                                    chatId: chatId,
-                                    chatName: patientName,
-                                    doctorName: patientName,
-                                  ),
-                                ),
-                              );
-                            },
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 8),
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  CircleAvatar(
-                                    radius: 33,
-                                    backgroundImage: patientImage
-                                            .toString()
-                                            .startsWith('http')
-                                        ? NetworkImage(patientImage)
-                                        : AssetImage(patientImage)
-                                            as ImageProvider,
-                                  ),
-                                  Positioned(
-                                    top: .1,
-                                    right: .1,
-                                    child: Container(
-                                      width: 20,
-                                      height: 20,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.greenColor,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                            color: AppColors.whiteColor,
-                                            width: 2),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                  return Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8),
+                    child: Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 33,
+                          backgroundImage:
+                              AssetImage(doctor.image),
+                        ),
+                        Positioned(
+                          top: 2,
+                          right: 2,
+                          child: Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: AppColors.greenColor,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: AppColors.whiteColor,
+                                  width: 2),
                             ),
-                          );
-                        },
-                      );
-                    },
+                          ),
+                        ),
+                      ],
+                    ),
                   );
                 },
               ),
             ),
 
-            const SizedBox(height: 25),
+            const SizedBox(height: 12),
 
+            // 🔹 Messages
             const Text(
               "Messages",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+              style:
+                  TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 1),
 
             Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('chats')
-                    .where('doctorId', isEqualTo: currentUserId)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+              child: ListView.builder(
+                itemCount: filteredDoctors.length,
+                itemBuilder: (context, index) {
+                  final doctor = filteredDoctors[index];
 
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(child: Text("No chats yet."));
-                  }
-
-                  final chats = snapshot.data!.docs.where((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    final name =
-                        (data['patientName'] ?? '').toString().toLowerCase();
-                    return name.contains(searchQuery);
-                  }).toList();
-
-                  chats.sort((a, b) {
-                    final aTime = (a.data() as Map<String, dynamic>)['updatedAt'] ??
-                        (a.data() as Map<String, dynamic>)['createdAt'];
-                    final bTime = (b.data() as Map<String, dynamic>)['updatedAt'] ??
-                        (b.data() as Map<String, dynamic>)['createdAt'];
-                    if (aTime is Timestamp && bTime is Timestamp) {
-                      return bTime.compareTo(aTime);
-                    }
-                    return 0;
-                  });
-
-                  return ListView.builder(
-                    itemCount: chats.length,
-                    itemBuilder: (context, index) {
-                      final data = chats[index].data() as Map<String, dynamic>;
-                      final chatId = chats[index].id;
-                      final patientId = data['patientId'];
-                      final lastMessage =
-                          data['lastMessage'] ?? "Say hi 👋";
-                      final unreadCount = data['unreadCount'] ?? 0;
-                      final timestamp = data['updatedAt'] ?? data['createdAt'];
-                      String time = "";
-
-                      if (timestamp is Timestamp) {
-                        final date = timestamp.toDate();
-                        time =
-                            "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
-                      }
-
-                      return FutureBuilder<DocumentSnapshot>(
-                        future: FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(patientId)
-                            .get(),
-                        builder: (context, userSnapshot) {
-                          if (!userSnapshot.hasData) {
-                            return const SizedBox();
-                          }
-
-                          final userData =
-                              userSnapshot.data!.data() as Map<String, dynamic>;
-                          final patientName = userData['name'] ?? 'Unknown';
-                          final patientImage =
-                              userData['image'] ?? 'lib/images/patientt.png';
-
-                          return ChatTile(
-                            name: patientName,
-                            lastMessage: lastMessage,
-                            time: time,
-                            image: patientImage,
-                            unreadCount: unreadCount,
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ChatsPageDoctor(
-                                    chatId: chatId,
-                                    chatName: patientName,
-                                    doctorName: patientName,
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      );
-                    },
+                  return ChatTile(
+                    name: doctor.name,
+                    lastMessage: doctor.lastMessage,
+                    time: doctor.time,
+                    image: doctor.image,
+                    unreadCount: doctor.unreadCount,
+onTap: () {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ChatsPageDoctor(doctorName: 'Dr. John Smith', chatId: ''),
+    ),
+  );
+},
                   );
                 },
               ),
@@ -286,6 +216,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
   }
 }
 
+// 🔹 Chat Tile
 class ChatTile extends StatelessWidget {
   final String name;
   final String lastMessage;
@@ -304,20 +235,13 @@ class ChatTile extends StatelessWidget {
     required this.onTap,
   });
 
-  bool get isPhotoMessage {
-    final msg = lastMessage.toLowerCase();
-    return msg == 'photo' ||
-        msg.contains('image') ||
-        msg.contains('.jpg') ||
-        msg.contains('.png');
-  }
-
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
         child: Container(
           decoration: BoxDecoration(
             color: Colors.grey[200],
@@ -325,66 +249,45 @@ class ChatTile extends StatelessWidget {
           ),
           padding: const EdgeInsets.all(12),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CircleAvatar(
                 radius: 30,
-                backgroundImage: image.toString().startsWith('http')
-                    ? NetworkImage(image)
-                    : AssetImage(image) as ImageProvider,
+                backgroundImage: AssetImage(image),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
                   children: [
                     Text(
-                      name.isNotEmpty ? name : 'Unknown',
+                      name,
                       style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 16),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16),
                     ),
                     const SizedBox(height: 8),
-                    if (isPhotoMessage)
-                      Row(
-                        children: [
-                          Icon(Icons.photo,
-                              size: 16, color: AppColors.greyColor),
-                          const SizedBox(width: 5),
-                          Text(
-                            "Photo",
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.greyColor,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ],
-                      )
-                    else
-                      SizedBox(
-                        width: 210,
-                        child: Text(
-                          lastMessage.isNotEmpty ? lastMessage : 'Say hi 👋',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.greyColor,
-                            height: 1.7,
-                          ),
-                          maxLines: 3,
-                          overflow: TextOverflow.visible,
-                        ),
+                    Text(
+                      lastMessage,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.greyColor,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
               Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Text(
-                    time.isNotEmpty ? time : '',
-                    style: TextStyle(fontSize: 12, color: AppColors.greyColor),
+                    time,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.greyColor),
                   ),
-                  const SizedBox(height: 38),
+                  const SizedBox(height: 20),
                   if (unreadCount > 0)
                     Container(
                       width: 20,
@@ -392,12 +295,14 @@ class ChatTile extends StatelessWidget {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: AppColors.blueColor,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius:
+                            BorderRadius.circular(6),
                       ),
                       child: Text(
                         unreadCount.toString(),
-                        style: TextStyle(
-                            color: AppColors.whiteColor, fontSize: 12),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12),
                       ),
                     ),
                 ],

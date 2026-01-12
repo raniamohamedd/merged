@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chat_details_screen.dart';
+import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chat_details_screen.dart' hide AppColors;
 import 'package:flutter_application_2/core/constants/colors.dart';
 
 class SearchScreenD extends StatefulWidget {
@@ -112,7 +112,7 @@ class _SearchScreenState extends State<SearchScreenD> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ChatsPageDoctor(chatName: name, chatId: chatId, doctorName: name)
+        builder: (_) => ChatsPageDoctor( chatId: chatId, doctorName: name)
       ),
     );
   }

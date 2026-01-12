@@ -413,9 +413,10 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
             
             SizedBox(height: 44,),
               Padding(
-                padding: const EdgeInsets.only(left: 60),
+                padding: const EdgeInsets.only(left: 10),
                 child: Row(
   children: [
+    IconButton(onPressed: (){}, icon: Icon(Icons.notifications_active,color: AppColors.blueColor,)),
     const Spacer(), // pushes text to center
     Text(
       "My Profile",
@@ -637,8 +638,29 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
                 ),
               ),
             ),
-            const SizedBox(height: 24),
 
+            const SizedBox(height: 24),
+ Card(
+                            color: Colors.white,
+
+              child: Padding(
+                padding: const EdgeInsets.only(left: 120,right: 70),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        TextButton(onPressed:(){}
+                        , child:  Text("Log out",
+                            style: TextStyle(fontWeight: FontWeight.bold,color: AppColors.blueColor))),
+                                       Icon(Icons.logout,color: AppColors.blueColor,)
+],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: 20,),
             if (isEditing)
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
