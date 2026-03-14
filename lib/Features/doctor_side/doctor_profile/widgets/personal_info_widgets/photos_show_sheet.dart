@@ -58,10 +58,10 @@ Future<String?> showImagePickerSheet(
             return GestureDetector(
               onTap: () async {
                 if (isDoctor) {
-                  await firestoreService.updateDoctorField(
-                    'imageUrl',
-                    imagePath,
-                  );
+                  // await firestoreService.updateDoctorField(
+                  //   'imageUrl',
+                  //   imagePath,
+                  // );
                   await firestoreService.updateUserField('image', imagePath);
                   UserSession.currentDoctor = UserSession.currentDoctor!
                       .copyWith(imageUrl: imagePath);

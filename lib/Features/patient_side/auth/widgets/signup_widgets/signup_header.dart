@@ -29,17 +29,16 @@ class SignupHeader extends StatelessWidget {
         
         // SizedBox(height: 2.5),
 
-        SizedBox(height: 20),
 
         // Center(child: Image.asset(Strings.LogoPath, height: 50, width: 50)),
-          Center(child: HealthcareLogo(logo: HealthcareIcons.stethoscope, color: AppColors.blueColor, isGradient: false,size: 80,iconSize: 20,)),
+          // Center(child: HealthcareLogo(logo: HealthcareIcons.stethoscope, color: AppColors.blueColor, isGradient: false,size: 80,iconSize: 20,)),
           SizedBox(height: 5,),
         Center(
           child: Text(
             Create,
             style: TextStyle(
-              fontSize: 20,
-              color: AppColors.blackColor,
+              fontSize: 20,fontWeight: FontWeight.bold,
+              color: AppColors.blueColor,
             ),
           ),
         ),

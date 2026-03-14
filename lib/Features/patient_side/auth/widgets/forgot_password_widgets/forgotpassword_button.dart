@@ -1,9 +1,11 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/patient_side/auth/view/login_view.dart';
+import 'package:flutter_application_2/Features/patient_side/auth/view/reset_screen.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/services/api_service.dart';
 
 class ForgotpasswordButton extends StatefulWidget {
+  
   final String text;
   final String email;
   // final VoidCallback onPressedButton;
@@ -21,27 +23,53 @@ class ForgotpasswordButton extends StatefulWidget {
 
 class _ForgotpasswordButtonState extends State<ForgotpasswordButton> {
   
+      final TextEditingController emailController = TextEditingController();
+  final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+
+    bool loading = false;
+
+  Future<void> handleforget() async {
+  if (!formKey.currentState!.validate()) return;
+
+ 
+
+  setState(() => loading = true);
+
+  try {
+    final response = await ApiService.forgetpassword(
+ 
+      email: emailController.text.trim(),
   
-  
-  Future<void> resetPassword() async {
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: widget.email);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password reset link sent! Check your email.'),
-          backgroundColor: Colors.green,
+    );
+
+    // 👇 ده هيطبع الريسبونس من السيرفر
+    print("forget Response:");
+    print(response);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ResetScreen(email: emailController.text.trim(),
+          // email: emailController.text.trim(),
         ),
-      );
-      Navigator.push(context, MaterialPageRoute(builder: (context) => LoginScreen())); 
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
+      ),
+    );
+
+  } catch (e) {
+
+    // 👇 ده هيطبع الايرور
+    print("forget Error: $e");
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Error: $e")),
+    );
   }
+
+  setState(() => loading = false);
+} 
+  
+  
+ 
   
   
   
@@ -64,7 +92,7 @@ class _ForgotpasswordButtonState extends State<ForgotpasswordButton> {
                   borderRadius: BorderRadius.circular(15.0),
                 ),
               ),
-              onPressed: resetPassword,
+              onPressed: (){},
 
               // },
               child: Text(
@@ -75,24 +103,7 @@ class _ForgotpasswordButtonState extends State<ForgotpasswordButton> {
           ),
 
           SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text("Need help? Visit our"),
-              GestureDetector(
-                onTap: widget.onPressedtext,
-                child: Text(
-                  " help center",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+          ],
       ),
     );
   }

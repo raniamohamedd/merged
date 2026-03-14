@@ -8,6 +8,8 @@ class CustomTextField extends StatefulWidget {
   final TextEditingController controller;
   final bool isPassword;
   final String? Function(String?)? validator;
+   final  bool enabled;
+
 
   const CustomTextField({
     super.key,
@@ -15,7 +17,8 @@ class CustomTextField extends StatefulWidget {
     required this.icon,
     required this.controller,
     this.isPassword = false,
-    this.validator,
+    this.validator, 
+    this.enabled= true
   });
 
   @override

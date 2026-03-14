@@ -3,7 +3,13 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_application_2/Features/patient_side/home_screen/widget/header.dart';
 import 'package:flutter_application_2/core2/constants/colors.dart';
 import 'package:flutter_launcher_icons/xml_templates.dart';
-
+import 'package:pdf/widgets.dart' as pw;
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+  import 'package:flutter_downloader/flutter_downloader.dart';
+import 'package:path_provider/path_provider.dart';
 class Reportscreen extends StatelessWidget {
   const Reportscreen({super.key});
 
@@ -76,24 +82,33 @@ Text("Last week's data")
 
 Align(
   alignment: Alignment.center,
-  child: ElevatedButton.icon(
-    icon: const Icon(Icons.download, color: Colors.white), // أيقونة أبيض
-    label: const Text(
-      "Download Report",
-      style: TextStyle(color: Colors.white), // نص أبيض
-    ),
-    style: ElevatedButton.styleFrom(
-      backgroundColor:AppColors.blueColor, // لون الزرار أزرق
-      padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 12),
- textStyle:  TextStyle(
-                  // fontSize: 22,
-                  // fontWeight: FontWeight.bold,
-                  color:AppColors.blueColor,
-                ),    ),
-    onPressed: () {
-      // هنا حط أي كود عند الضغط
-    },
+  child: 
+ElevatedButton.icon(
+  icon: const Icon(Icons.download, color: Colors.white),
+  label: const Text(
+    "Download Report",
+    style: TextStyle(color: Colors.white),
   ),
+  style: ElevatedButton.styleFrom(
+    backgroundColor: AppColors.blueColor,
+    padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 12),
+  ),
+
+
+onPressed: () async {
+
+  final dir = await getExternalStorageDirectory();
+
+  await FlutterDownloader.enqueue(
+    url: "https://example.com/health_report.pdf", // رابط التقرير
+    savedDir: dir!.path,
+    fileName: "health_report.pdf",
+    showNotification: true, // يظهر في شريط الاشعارات
+    openFileFromNotification: true,
+  );
+
+}
+),
 ),
 
             const SizedBox(height: 16),
@@ -650,3 +665,10 @@ class _AnimatedBloodPressureChartState
     );
   }
 }
+
+
+
+
+
+
+

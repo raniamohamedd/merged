@@ -90,10 +90,10 @@ Future<UserModel> getUser(String userId) async {
     return PatientModel.fromMap(doc.data()!,doc.id);
   }
   
-  Future<void> updateDoctorField(String field, dynamic newValue) async {
-    final doctorId = UserSession.currentDoctor!.doctorId;
-    await _firestore.collection('doctors').doc(doctorId).update({field: newValue});
-  }
+  // Future<void> updateDoctorField(String field, dynamic newValue) async {
+  //   final doctorId = UserSession.currentDoctor!.doctorId;
+  //   await _firestore.collection('doctors').doc(doctorId).update({field: newValue});
+  // }
 
   Future<void> updateUserField(String field, dynamic newValue) async {
     final user_id = UserSession.currentUser!.user_id;

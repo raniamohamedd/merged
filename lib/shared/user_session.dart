@@ -3,6 +3,8 @@ import 'package:flutter_application_2/models/patient_model.dart';
 import 'package:flutter_application_2/models/user_model.dart';
 
 class UserSession {
+    static String? accessToken;
+  static String? refreshToken;
   static UserModel? currentUser;
   static DoctorModel? currentDoctor;
   static PatientModel? currentPatient;
@@ -11,5 +13,8 @@ class UserSession {
     currentUser = null;
     currentDoctor = null;
     currentPatient = null;
+     accessToken = null;
+    refreshToken = null;
   }
 }
+

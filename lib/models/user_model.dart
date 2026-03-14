@@ -23,19 +23,38 @@ class UserModel {
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
+  // For Firestore
   factory UserModel.fromMap(Map<String, dynamic> map, String id) {
     return UserModel(
       user_id: id,
       name: map["name"],
       email: map["email"],
       password: map["password"],
-      phoneNum: map["phoneNum"],
+      phoneNum: map["phoneNum"] ?? 0,
       gender: map["gender"] ?? "male",
       image: map["image"] ?? "",
       role: map["role"] ?? "User",
       age: map["age"] ?? 0,
       createdAt: map["createdAt"] != null
           ? DateTime.parse(map["createdAt"])
+          : DateTime.now(),
+    );
+  }
+
+  // ✅ From JSON from API
+  factory UserModel.fromJson(Map<String, dynamic> json) {
+    return UserModel(
+      user_id: json['id']?.toString() ?? '',
+      name: json['name'] ?? '',
+      email: json['email'] ?? '',
+      password: json['password'] ?? '',
+      phoneNum: json['phoneNum'] ?? 0,
+      image: json['image'] ?? '',
+      gender: json['gender'] ?? 'male',
+      role: json['role'] ?? 'User',
+      age: json['age'] ?? 0,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'])
           : DateTime.now(),
     );
   }
@@ -54,7 +73,6 @@ class UserModel {
     };
   }
 
-  // ✅ copyWith method
   UserModel copyWith({
     String? user_id,
     String? name,

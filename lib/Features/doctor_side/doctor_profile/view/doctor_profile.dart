@@ -57,7 +57,7 @@ class _DoctorProfileState extends State<DoctorProfile> {
                  Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const DoctorPersonalInfo(),
+                    builder: (context) => const Scaffold(),
                   ),
                 );
                 // setState(() {});
