@@ -1,8 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/doctor_side/doctor_profile/widgets/personal_info_widgets/photos_show_sheet.dart';
-import 'package:flutter_application_2/Features/patient_side/profile/view/profile_view.dart';
-import 'package:flutter_application_2/Features/patient_side/profile/widgets/shared/custom_appbar.dart';
 import 'package:flutter_application_2/Features/patient_side/profile/widgets/personal_info/custom_personal_info_container.dart';
 import 'package:flutter_application_2/Features/patient_side/profile/widgets/shared/user_image_profile.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';

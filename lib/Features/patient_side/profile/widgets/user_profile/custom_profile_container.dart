@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/Features/patient_side/auth/view/login_view.dart';
+import 'package:flutter_application_2/Features/auth/screens/login_view.dart';
 import 'package:flutter_application_2/Features/patient_side/profile/view/personal_info.dart';
 import 'package:flutter_application_2/Features/patient_side/profile/view/settings_page.dart';
 import 'package:flutter_application_2/Features/patient_side/profile/widgets/user_profile/customRow.dart';
 import 'package:flutter_application_2/Features/patient_side/profile/widgets/user_profile/logout_dialog.dart';
-import 'package:flutter_application_2/services/auth_services.dart';
+import 'package:flutter_application_2/core/services/auth_services.dart';
 import 'package:flutter_application_2/shared/user_session.dart';
 // import 'package:health_care_app/Features/patient_side/profile/widgets/custom_personal_info_container.dart';
 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/core2/constants/icons.dart';
+import 'package:flutter_application_2/core/constants/icons.dart';
 final List<Map<String, dynamic>> pages = [
   {
     "title": "Connect with Healthcare Professionals",

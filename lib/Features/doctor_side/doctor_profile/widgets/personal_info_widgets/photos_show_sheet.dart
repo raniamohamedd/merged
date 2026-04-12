@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/services/firestore_services.dart';
+import 'package:flutter_application_2/core/services/firestore_services.dart';
 import 'package:flutter_application_2/shared/user_session.dart';
 
 Future<String?> showImagePickerSheet(

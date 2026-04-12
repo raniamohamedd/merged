@@ -1,16 +1,30 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:image/image.dart' as img;
-import 'package:image_picker/image_picker.dart';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_application_2/Features/auth/screens/login_view.dart';
+import 'package:flutter_application_2/Features/patient_side/profile/view/alertToDoc.dart';
+import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/core/services/api_service.dart';
+import 'package:flutter_application_2/shared/user_session.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:image/image.dart' as img;
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_application_2/Features/patient_side/auth/view/login_view.dart';
-import 'package:flutter_application_2/core/constants/colors.dart';
-import 'package:flutter_application_2/services/api_service.dart';
-import 'package:flutter_application_2/shared/user_session.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+class DoctorContact {
+  final String name;
+  final String specialty;
+  final String phone;
+
+  DoctorContact({
+    required this.name,
+    required this.specialty,
+    required this.phone,
+  });
+}
 
 class PatientProfilePage extends StatefulWidget {
   final String userEmail;
@@ -28,8 +42,26 @@ class PatientProfilePage extends StatefulWidget {
 
 class _PatientProfilePageState extends State<PatientProfilePage> {
   bool isEditing = false;
-  String? profileImageUrl; // رابط صورة البروفايل
-  File? _selectedImageFile; // الصورة المختارة محليًا قبل رفعها
+  String? profileImageUrl;
+  File? _selectedImageFile;
+
+  final List<DoctorContact> doctors = [
+    DoctorContact(
+      name: "Dr. Sarah Mitchell",
+      specialty: "Cardiologist",
+      phone: "01012345678",
+    ),
+    DoctorContact(
+      name: "Dr. Ahmed Ali",
+      specialty: "Dermatologist",
+      phone: "01123456789",
+    ),
+    DoctorContact(
+      name: "Dr. Mona Hassan",
+      specialty: "Neurologist",
+      phone: "01234567890",
+    ),
+  ];
 
   Map<String, String> profileData = {
     "fullName": "",
@@ -55,16 +87,15 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
     loadProfile();
   }
 
-  // تحميل بيانات البروفايل
-  void loadProfile() async {
+  Future<void> loadProfile() async {
     try {
-      var response = await ApiService.getProfile();
-      var user = response["data"]["user"];
+      final response = await ApiService.getProfile();
+      final user = response["data"]["user"];
 
       setState(() {
         profileData["phone"] = user["phone"] ?? "";
         profileData["fullName"] =
-            "${user["firstName"] ?? ""} ${user["lastName"] ?? ""}";
+            "${user["firstName"] ?? ""} ${user["lastName"] ?? ""}".trim();
         profileData["email"] = user["email"] ?? "";
         profileData["gender"] = user["gender"] ?? "";
         profileData["dateOfBirth"] =
@@ -73,52 +104,49 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
             user["image"] != null ? user["image"]["secure_url"] : null;
       });
     } catch (e) {
-      print("Profile error: $e");
+      debugPrint("Profile error: $e");
     }
   }
 
-  // اختيار ورفع صورة
   Future<void> pickAndUploadImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
     if (pickedFile == null) return;
 
-    // عرض الصورة فورًا
     setState(() {
       _selectedImageFile = File(pickedFile.path);
     });
 
-    // تحويل الصورة لـ PNG
     final bytes = await pickedFile.readAsBytes();
     final originalImage = img.decodeImage(bytes);
+
     if (originalImage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Cannot read selected image")),
-      );
+      _showTopMessage("Cannot read selected image");
       return;
     }
-    final pngBytes = img.encodePng(originalImage);
 
-    // حفظ الصورة مؤقتًا
+    final pngBytes = img.encodePng(originalImage);
     final tempDir = Directory.systemTemp;
     final pngFile = File('${tempDir.path}/profile_image.png');
     await pngFile.writeAsBytes(pngBytes);
 
-    // رفع الصورة بالـ PATCH مع التوكن
     final prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString("accessToken");
+    final token = prefs.getString("accessToken");
 
     final request = http.MultipartRequest(
       'PATCH',
       Uri.parse('https://medpal-production-2abe.up.railway.app/user/image'),
     );
+
     request.headers['Authorization'] = 'Bearer $token';
-    request.files.add(await http.MultipartFile.fromPath(
-      'image',
-      pngFile.path,
-      contentType: MediaType('image', 'png'),
-    ));
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'image',
+        pngFile.path,
+        contentType: MediaType('image', 'png'),
+      ),
+    );
 
     final response = await request.send();
     final respStr = await response.stream.bytesToString();
@@ -129,93 +157,74 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
 
       setState(() {
         profileImageUrl = uploadedImageUrl;
-        _selectedImageFile = null; // نظف الصورة المؤقتة
+        _selectedImageFile = null;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Profile image uploaded successfully")),
-      );
+      _showTopMessage("Profile image uploaded successfully");
     } else {
-      print("Failed: $respStr");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to upload image")),
-      );
+      _showTopMessage("Failed to upload image");
     }
   }
 
-Future<void> handleSave() async {
-  setState(() {
-    isEditing = false;
-  });
-
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString("accessToken");
-
-    if (token == null || token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("User not logged in")),
-      );
-      return;
-    }
-
-    // جهز الباي لود
-    Map<String, dynamic> payload = {
-      "email": profileData["email"], // لو السيرفر يحتاج
-      "bloodType": profileData["bloodType"],
-      "height": profileData["height"]!.isNotEmpty
-          ? int.tryParse(profileData["height"]!)
-          : null,
-      "weight": profileData["weight"]!.isNotEmpty
-          ? int.tryParse(profileData["weight"]!)
-          : null,
-      "allergies": profileData["allergies"],
-      "note": profileData["notes"],
-      "chronicDiseases": [], // لو عندك بيانات من قبل ضيفها هنا
-    };
-
-    // PATCH للبيانات
-    final response = await http.patch(
-      Uri.parse("https://medpal-production-2abe.up.railway.app/patient/profile"),
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer $token",
-      },
-      body: jsonEncode(payload),
-    );
-
-    if (response.statusCode == 200) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Profile saved successfully")),
-      );
-    } else {
-      print("Failed to save: ${response.body}");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to save: ${response.body}")),
-      );
-    }
-
-    // لو فيه صورة جديدة، ارفعها بعد حفظ البيانات
-    if (_selectedImageFile != null) {
-      await pickAndUploadImage();
-    }
-  } catch (e) {
-    print("Error saving profile: $e");
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Error saving profile: $e")),
-    );
-  }
-}
- void handleCancel() {
+  Future<void> handleSave() async {
     setState(() {
       isEditing = false;
     });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString("accessToken");
+
+      if (token == null || token.isEmpty) {
+        _showTopMessage("User not logged in");
+        return;
+      }
+
+      final payload = {
+        "email": profileData["email"],
+        "bloodType": profileData["bloodType"],
+        "height": profileData["height"]!.isNotEmpty
+            ? int.tryParse(profileData["height"]!)
+            : null,
+        "weight": profileData["weight"]!.isNotEmpty
+            ? int.tryParse(profileData["weight"]!)
+            : null,
+        "allergies": profileData["allergies"],
+        "note": profileData["notes"],
+        "chronicDiseases": [],
+      };
+
+      final response = await http.patch(
+        Uri.parse(
+          "https://medpal-production-2abe.up.railway.app/patient/profile",
+        ),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode == 200) {
+        _showTopMessage("Profile saved successfully");
+      } else {
+        _showTopMessage("Failed to save profile");
+      }
+
+      if (_selectedImageFile != null) {
+        await pickAndUploadImage();
+      }
+    } catch (e) {
+      debugPrint("Error saving profile: $e");
+      _showTopMessage("Error saving profile");
+    }
   }
 
   String getInitials(String name) {
     return name
         .split(" ")
-        .map((e) => e.isNotEmpty ? e[0] : "")
+        .where((e) => e.isNotEmpty)
+        .map((e) => e[0])
         .take(2)
         .join()
         .toUpperCase();
@@ -233,18 +242,123 @@ Future<void> handleSave() async {
     return age;
   }
 
-  void callEmergency() async {
+  Future<void> callEmergency() async {
     final Uri phoneUri = Uri(scheme: 'tel', path: '123');
     if (await canLaunchUrl(phoneUri)) {
       await launchUrl(phoneUri);
     } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Cannot launch phone dialer")));
+      _showTopMessage("Cannot launch phone dialer");
     }
   }
 
-  Widget buildTextField(String label, String field,
-      {TextInputType? keyboardType, int? maxLines}) {
+  void handleInAppCall() {
+    showDoctorsSheet("in_app");
+  }
+
+  void handleRegularCall() {
+    showDoctorsSheet("regular");
+  }
+
+  void showDoctorsSheet(String actionType) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 45,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Icon(Icons.medical_services_outlined, color: AppColors.blueColor),
+                  const SizedBox(width: 8),
+                  Text(
+                    actionType == "regular"
+                        ? "Choose Doctor for Regular Call"
+                        : "Choose Doctor for In-App Call",
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              ...doctors.map((doctor) {
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    backgroundColor: AppColors.blueColor.withOpacity(.1),
+                    child: Icon(Icons.person, color: AppColors.blueColor),
+                  ),
+                  title: Text(
+                    doctor.name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(doctor.specialty),
+                  trailing: const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 16,
+                  ),
+                  onTap: () async {
+                    Navigator.pop(context);
+
+                    if (actionType == "regular") {
+                      final Uri phoneUri =
+                          Uri(scheme: 'tel', path: doctor.phone);
+                      if (await canLaunchUrl(phoneUri)) {
+                        await launchUrl(phoneUri);
+                      } else {
+                        _showTopMessage("Cannot launch phone dialer");
+                      }
+                    } else {
+                      _showTopMessage(
+                        "Starting in-app call with ${doctor.name}...",
+                      );
+                    }
+                  },
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showTopMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.blueColor,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+      ),
+    );
+  }
+
+  Widget buildTextField(
+    String label,
+    String field, {
+    TextInputType? keyboardType,
+    int? maxLines,
+  }) {
     return TextField(
       keyboardType: keyboardType,
       controller: TextEditingController(text: profileData[field]),
@@ -263,72 +377,209 @@ Future<void> handleSave() async {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide:
-              BorderSide(color: AppColors.blueColor.withOpacity(0.7), width: 1.5),
+          borderSide: BorderSide(
+            color: AppColors.blueColor.withOpacity(0.18),
+            width: 1.3,
+          ),
         ),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
     );
   }
 
   Widget buildBadge(String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          )
-        ],
       ),
       child: Text(
         text,
-        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13),
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+
+  Widget buildSectionCard(String title, IconData icon, List<Widget> children) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFF0F2F5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.03),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: AppColors.blueColor.withOpacity(.1),
+                child: Icon(
+                  icon,
+                  color: AppColors.blueColor,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: AppColors.blueColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget buildActionCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: color.withOpacity(.15)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.03),
+              blurRadius: 12,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: color.withOpacity(.12),
+              child: Icon(icon, color: color),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 16,
+              color: Colors.grey.shade500,
+            ),
+          ],
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final fullName = profileData["fullName"]!.isEmpty
+        ? "Patient Name"
+        : profileData["fullName"]!;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: const Color(0xFFF7FAFC),
       body: SingleChildScrollView(
         child: Column(
           children: [
             Container(
               width: double.infinity,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF5C7AEA), Color(0xFF00C6FF)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
+              padding: const EdgeInsets.only(
+                top: 52,
+                bottom: 34,
+                left: 18,
+                right: 18,
               ),
-              padding:
-                  const EdgeInsets.only(top: 50, bottom: 30, left: 16, right: 16),
+              decoration: BoxDecoration(
+                color: AppColors.blueColor,
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(32),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.blueColor.withOpacity(.18),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
               child: Row(
                 children: [
                   IconButton(
-                    onPressed: () {},
-                    icon: const Icon(Icons.notifications_active,
-                        color: Colors.white, size: 28),
+                    onPressed: widget.onBack,
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white,
+                    ),
                   ),
                   const Spacer(),
                   const Text(
                     "My Profile",
                     style: TextStyle(
-                        color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const Spacer(),
                   IconButton(
                     icon: Icon(
-                      isEditing ? Icons.check : Icons.edit,
+                      isEditing ? Icons.check_rounded : Icons.edit_outlined,
                       color: Colors.white,
                       size: 26,
                     ),
@@ -341,32 +592,35 @@ Future<void> handleSave() async {
                         });
                       }
                     },
-                  )
+                  ),
                 ],
               ),
             ),
-            SizedBox(height: 20,),
             Transform.translate(
-              offset: const Offset(0, -40),
+              offset: const Offset(0, -28),
               child: Column(
                 children: [
                   Stack(
                     children: [
                       CircleAvatar(
                         key: ValueKey(profileImageUrl ?? _selectedImageFile?.path),
-                        radius: 50,
+                        radius: 52,
                         backgroundColor: AppColors.blueColor,
                         backgroundImage: _selectedImageFile != null
                             ? FileImage(_selectedImageFile!)
                             : (profileImageUrl != null
                                 ? NetworkImage(profileImageUrl!)
-                                : null),
-                        child: (_selectedImageFile == null && profileImageUrl == null)
-                            ? Text(getInitials(profileData["fullName"]!),
+                                : null) as ImageProvider?,
+                        child: (_selectedImageFile == null &&
+                                profileImageUrl == null)
+                            ? Text(
+                                getInitials(fullName),
                                 style: const TextStyle(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white))
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              )
                             : null,
                       ),
                       if (isEditing)
@@ -378,123 +632,189 @@ Future<void> handleSave() async {
                             child: CircleAvatar(
                               radius: 18,
                               backgroundColor: Colors.white,
-                              child:
-                                  Icon(Icons.camera_alt, color: AppColors.blueColor),
+                              child: Icon(
+                                Icons.camera_alt_outlined,
+                                color: AppColors.blueColor,
+                              ),
                             ),
                           ),
-                        )
+                        ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  Text(
+                    fullName,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    profileData["email"] ?? "",
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
                     children: [
                       buildBadge(
-                          profileData["gender"]!.toLowerCase() == "male"
-                              ? "Male"
-                              : "Female",
-                          Colors.blueAccent),
-                      const SizedBox(width: 8),
-                      buildBadge("${getAge(profileData["dateOfBirth"]!)} yrs",
-                          Colors.blueAccent),
-                      const SizedBox(width: 8),
-                      buildBadge(profileData["bloodType"]!, Colors.blueAccent),
+                        profileData["gender"]!.isEmpty
+                            ? "Unknown"
+                            : (profileData["gender"]!.toLowerCase() == "male"
+                                ? "Male"
+                                : "Female"),
+                        Colors.blueAccent,
+                      ),
+                      buildBadge(
+                        "${getAge(profileData["dateOfBirth"]!)} yrs",
+                        Colors.blueAccent,
+                      ),
+                      if (profileData["bloodType"]!.isNotEmpty)
+                        buildBadge(profileData["bloodType"]!, Colors.redAccent),
                     ],
                   ),
                 ],
               ),
             ),
-            buildSectionCard("Personal Information", [
-              buildTextField("Full Name", "fullName"),
-              const SizedBox(height: 12),
-              buildTextField("Email", "email", keyboardType: TextInputType.emailAddress),
-              const SizedBox(height: 12),
-              buildTextField("Phone", "phone", keyboardType: TextInputType.phone),
-              const SizedBox(height: 12),
-              buildTextField("Date of Birth", "dateOfBirth"),
-              const SizedBox(height: 12),
-              buildTextField("Address", "address"),
-            ]),
-            buildSectionCard("Medical Information", [
-              buildTextField("Blood Type", "bloodType"),
-              const SizedBox(height: 12),
-              buildTextField("Height (cm)", "height", keyboardType: TextInputType.number),
-              const SizedBox(height: 12),
-              buildTextField("Weight (kg)", "weight", keyboardType: TextInputType.number),
-              const SizedBox(height: 12),
-              buildTextField("Allergies", "allergies", maxLines: 2),
-              const SizedBox(height: 12),
-              buildTextField("Chronic Conditions", "chronicConditions", maxLines: 2),
-              const SizedBox(height: 12),
-              buildTextField("Notes", "notes", maxLines: 3),
-            ]),
-            buildSectionCard("Emergency Contact", [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: ElevatedButton.icon(
-                  onPressed: callEmergency,
-                  icon: const Icon(Icons.call, color: Colors.white),
-                  label: const Text(
-                    "Call Emergency",
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
-                    minimumSize: const Size.fromHeight(50),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25)),
-                  ),
+            buildSectionCard(
+              "Personal Information",
+              Icons.person_outline,
+              [
+                buildTextField("Full Name", "fullName"),
+                const SizedBox(height: 12),
+                buildTextField(
+                  "Email",
+                  "email",
+                  keyboardType: TextInputType.emailAddress,
                 ),
-              ),
-            ]),
+                const SizedBox(height: 12),
+                buildTextField(
+                  "Phone",
+                  "phone",
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 12),
+                buildTextField("Date of Birth", "dateOfBirth"),
+                const SizedBox(height: 12),
+                buildTextField("Address", "address"),
+              ],
+            ),
+            buildSectionCard(
+              "Medical Information",
+              Icons.favorite_border,
+              [
+                buildTextField("Blood Type", "bloodType"),
+                const SizedBox(height: 12),
+                buildTextField(
+                  "Height (cm)",
+                  "height",
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                buildTextField(
+                  "Weight (kg)",
+                  "weight",
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                buildTextField("Allergies", "allergies", maxLines: 2),
+                const SizedBox(height: 12),
+                buildTextField(
+                  "Chronic Conditions",
+                  "chronicConditions",
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 12),
+                buildTextField("Notes", "notes", maxLines: 3),
+              ],
+            ),
+            buildSectionCard(
+              "Communication & Support",
+              Icons.support_agent_outlined,
+              [
+                buildActionCard(
+                  title: "In-App Call",
+                  subtitle: "Start an in-app call with your doctor",
+                  icon: Icons.call_outlined,
+                  color: AppColors.blueColor,
+                  onTap: handleInAppCall,
+                ),
+                const SizedBox(height: 12),
+                buildActionCard(
+                  title: "Regular Call",
+                  subtitle: "Call a doctor using your mobile network",
+                  icon: Icons.phone_forwarded_outlined,
+                  color: Colors.green,
+                  onTap: handleRegularCall,
+                ),
+                const SizedBox(height: 12),
+                buildActionCard(
+                  title: "Emergency Call",
+                  subtitle: "Contact emergency support immediately",
+                  icon: Icons.warning_amber_rounded,
+                  color: Colors.redAccent,
+                  onTap: callEmergency,
+                ),
+                           const SizedBox(height: 12),
+
+             buildActionCard(
+  title: "Send Update",
+  subtitle: "Report symptoms or updates to your doctor",
+  icon: Icons.send_outlined,
+  color: Colors.purple,
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const PatientAlertsPage(),
+      ),
+    );
+  },
+),
+             
+              ],
+            ),
+            const SizedBox(height: 8),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 50),
+              padding: const EdgeInsets.symmetric(horizontal: 40),
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.blueColor,
-                  minimumSize: const Size.fromHeight(50),
-                  shape:
-                      RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(52),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(22),
+                  ),
                 ),
-                icon: const Icon(Icons.logout, color: Colors.white),
-                label: const Text("Log Out",
-                    style: TextStyle(fontSize: 18, color: Colors.white)),
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text(
+                  "Log Out",
+                  style: TextStyle(fontSize: 17),
+                ),
                 onPressed: () async {
                   UserSession.accessToken = "";
                   UserSession.refreshToken = "";
                   final prefs = await SharedPreferences.getInstance();
                   await prefs.clear();
+
+                  if (!mounted) return;
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => LoginScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const LoginScreen(),
+                    ),
                   );
                 },
               ),
             ),
-            const SizedBox(height: 30),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget buildSectionCard(String title, List<Widget> children) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      elevation: 5,
-      shadowColor: Colors.black26,
-      color: Colors.blue[50],
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title,
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 18, color: Colors.blueAccent)),
-            const SizedBox(height: 16),
-            ...children,
+            const SizedBox(height: 28),
           ],
         ),
       ),

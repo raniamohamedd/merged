@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_2/Features/doctor_side/appointment/doctor_appoinment.dart';
-import 'package:flutter_application_2/Features/doctor_side/appointment/widgets/upcoming.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
-import '../../../models/appiontment_model.dart';
+import '../../../data/models/appiontment_model.dart';
 import '../../../shared/user_session.dart';
 
 class HomeScreenD extends StatelessWidget {

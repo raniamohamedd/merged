@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/patient_side/profile/widgets/personal_info/custom_profile_info_row.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
-import 'package:flutter_application_2/services/firestore_services.dart';
+import 'package:flutter_application_2/core/services/firestore_services.dart';
 import 'package:flutter_application_2/shared/user_session.dart';
 
 class CustomPersonalInfoContainer extends StatefulWidget {

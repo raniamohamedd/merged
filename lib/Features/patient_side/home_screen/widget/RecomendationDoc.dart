@@ -5,9 +5,9 @@ import 'package:flutter_application_2/Features/patient_side/doctor_review/screen
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/constants/sizes.dart';
 import 'package:flutter_application_2/Features/patient_side/home_screen/model/recomendation_doctor.dart';
-import 'package:flutter_application_2/services/firestore_services.dart';
+import 'package:flutter_application_2/core/services/firestore_services.dart';
 
-import '../../../../models/doctor_model.dart';
+import '../../../../data/models/doctor_model.dart';
 
 class RecomendationDoc extends StatelessWidget {
   const RecomendationDoc({super.key, this.searchQuery = ''});
@@ -66,20 +66,18 @@ class RecomendationDoc extends StatelessWidget {
                   d.id,
                 );
 
-                if (doctorModel != null) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => DoctorDetailsTabbarScreen(
-                        docModel: doctorModel,
-                        doctorId: d.id,
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => DoctorDetailsTabbarScreen(
+                      docModel: doctorModel,
+                      doctorId: d.id,
 
-                        
-                      ),
+                      
                     ),
-                  );
-                }
-              },
+                  ),
+                );
+                            },
               child: Card(
                 margin: const EdgeInsets.symmetric(vertical: 8),
                 shape: RoundedRectangleBorder(

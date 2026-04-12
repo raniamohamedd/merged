@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../../models/appiontment_model.dart';
+import '../../../../data/models/appiontment_model.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../shared/user_session.dart';
 

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/patient_side/confirmation/widgets/header_booking_confirmation.dart';
 import 'package:flutter_application_2/Features/patient_side/confirmation/widgets/instructions.dart';
 import 'package:flutter_application_2/shared/widgets/custom_button.dart';
-import 'package:flutter_application_2/shared/widgets/navigator.dart';
+import 'package:flutter_application_2/core/routing/navigators/navigator_patient.dart';
 
 import '../../../core/constants/colors.dart';
 

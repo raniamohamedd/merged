@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
-import 'package:flutter_application_2/models/appiontment_model.dart';
+import 'package:flutter_application_2/data/models/appiontment_model.dart';
 import 'package:flutter_application_2/shared/user_session.dart';
 
 class Upcoming extends StatelessWidget {

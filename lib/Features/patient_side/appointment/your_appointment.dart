@@ -4,11 +4,11 @@ import 'package:flutter_application_2/Features/patient_side/appointment/widget_s
 import 'package:flutter_application_2/Features/patient_side/appointment/widget_screen/payment_option.dart';
 import 'package:flutter_application_2/Features/patient_side/appointment/widget_screen/price_view.dart';
 import 'package:flutter_application_2/Features/patient_side/confirmation/booking_confirmation.dart';
-import 'package:flutter_application_2/models/doctor_model.dart';
+import 'package:flutter_application_2/data/models/doctor_model.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/constants/colors.dart';
-import '../../../models/appiontment_model.dart';
-import '../../../services/firestore_services.dart';
+import '../../../data/models/appiontment_model.dart';
+import '../../../core/services/firestore_services.dart';
 import '../../../shared/user_session.dart';
 
 class YourAppointment extends StatefulWidget {

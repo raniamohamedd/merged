@@ -5,8 +5,8 @@ import 'package:flutter_application_2/Features/patient_side/doctor_review/screen
 import 'package:flutter_application_2/Features/patient_side/home_screen/model/recomendation_doctor.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/constants/sizes.dart';
-import 'package:flutter_application_2/models/doctor_model.dart';
-import 'package:flutter_application_2/services/firestore_services.dart';
+import 'package:flutter_application_2/data/models/doctor_model.dart';
+import 'package:flutter_application_2/core/services/firestore_services.dart';
 
 class DoctorListView extends StatelessWidget {
   const DoctorListView({
@@ -80,24 +80,16 @@ class DoctorListView extends StatelessWidget {
         FirestoreService firestoreService = FirestoreService();
         DoctorModel? doctorModel = await firestoreService.getDoctor(d.id);
 
-        if (doctorModel != null) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) =>
-                DoctorDetailsTabbarScreen( doctorId: d.id,docModel : doctorModel ),
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+              DoctorDetailsTabbarScreen( doctorId: d.id,docModel : doctorModel ),
 
 
-            ),
-          );
-        } 
-
-        else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Doctor not found')),
-          );
-        }
-      },
+          ),
+        );
+            },
           borderRadius: BorderRadius.circular(12),
           child: Card(
             margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),

@@ -11,7 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
-import 'package:open_file/open_file.dart';
+// import 'package:open_file/open_file.dart';
 enum MessageType { text, image, audio, video, file }
 class ChatsPagePatient extends StatefulWidget {
   final String doctorName;
@@ -233,7 +233,7 @@ class _ChatsPagePatientState extends State<ChatsPagePatient> {
                             onTap: () async {
                               if (filePath.isNotEmpty &&
                                   File(filePath).existsSync()) {
-                                await OpenFile.open(filePath);
+                                // await OpenFile.open(filePath);
                               }
                             },
                             child: Row(

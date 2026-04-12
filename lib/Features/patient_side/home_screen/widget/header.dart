@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_application_2/Features/patient_side/chats/chatassist.dart';
-import 'package:flutter_application_2/Features/patient_side/chats/view/chats_list_screen.dart';
-import 'package:flutter_application_2/Features/patient_side/notification/notification_screen.dart';
-import 'package:flutter_application_2/Features/patient_side/profile/view/profile_view.dart';
-import 'package:flutter_application_2/core2/constants/colors.dart';
+import 'package:flutter_application_2/core/constants/colors2.dart';
 
 class HeaderWidget extends StatefulWidget {
   final ValueChanged<String>? onUserNameLoaded;

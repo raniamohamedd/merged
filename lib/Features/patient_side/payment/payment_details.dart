@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
-import 'package:flutter_application_2/shared/widgets/custom_button.dart';
 
 // import '../../core/constants/colors.dart';
 // import '../../shared/widgets/custom_button.dart';
-import '../confirmation/booking_confirmation.dart';
 
 class PaymentDetails extends StatelessWidget {
   const PaymentDetails({super.key});

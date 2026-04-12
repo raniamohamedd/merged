@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/services/firestore_services.dart';
+import 'package:flutter_application_2/core/services/firestore_services.dart';
 import '../../../../core/constants/colors.dart';
-import '../../../../models/doctor_model.dart';
+import '../../../../data/models/doctor_model.dart';
 import '../widgets/doctor_header_card.dart';
 import 'doctor_details_about_screen.dart';
 import 'doctor_details_review_screen.dart';

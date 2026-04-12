@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../../models/appiontment_model.dart';
+import '../../../../data/models/appiontment_model.dart';
 import '../../../../shared/user_session.dart';
 import 'custom_card_appoinment.dart';
 
@@ -15,7 +15,7 @@ class Completed extends StatelessWidget {
         .snapshots()
         .map((snapshot) {
       return snapshot.docs.map((doc) {
-        return AppointmentModel.fromMap(doc.data() as Map<String, dynamic>);
+        return AppointmentModel.fromMap(doc.data());
       }).where((app) => app.doctorId == doctorId && app.status == 'done').toList();
     });
   }

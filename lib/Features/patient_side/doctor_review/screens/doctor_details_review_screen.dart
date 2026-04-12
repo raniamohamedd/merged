@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/models/user_model.dart';
+import 'package:flutter_application_2/data/models/user_model.dart';
 import 'package:flutter_application_2/shared/user_session.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/constants/colors.dart';
-import '../../../../models/review_model.dart';
-import '../../../../services/firestore_services.dart';
+import '../../../../data/models/review_model.dart';
+import '../../../../core/services/firestore_services.dart';
 import '../widgets/review_card.dart';
 
 class DoctorDetailsReviewScreen extends StatefulWidget {
@@ -116,23 +116,21 @@ class _DoctorDetailsReviewScreenState extends State<DoctorDetailsReviewScreen> {
                         // 🟢 تحديث بيانات الدكتور بعد إضافة الريفيو
                         final doctorDoc = await _firestoreService.getDoctor(widget.doctorId);
 
-                        if (doctorDoc != null) {
-                          final currentReviews = doctorDoc.reviews;
-                          final currentRating = doctorDoc.rating;
+                        final currentReviews = doctorDoc.reviews;
+                        final currentRating = doctorDoc.rating;
 
-                          // حساب المتوسط الجديد
-                          final newTotalReviews = currentReviews + 1;
-                          final newAverageRating = ((currentRating * currentReviews) + selectedRating) / newTotalReviews;
+                        // حساب المتوسط الجديد
+                        final newTotalReviews = currentReviews + 1;
+                        final newAverageRating = ((currentRating * currentReviews) + selectedRating) / newTotalReviews;
 
-                          await _firestoreService.updateDoctorData(
-                            widget.doctorId,
-                            {
-                              'reviews': newTotalReviews,
-                              'rating': double.parse(newAverageRating.toStringAsFixed(1)),
-                            },
-                          );
-                        }
-
+                        await _firestoreService.updateDoctorData(
+                          widget.doctorId,
+                          {
+                            'reviews': newTotalReviews,
+                            'rating': double.parse(newAverageRating.toStringAsFixed(1)),
+                          },
+                        );
+                      
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(

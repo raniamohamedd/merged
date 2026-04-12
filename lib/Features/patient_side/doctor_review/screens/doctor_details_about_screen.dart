@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
-import 'package:flutter_application_2/models/doctor_model.dart';
+import 'package:flutter_application_2/data/models/doctor_model.dart';
 import 'package:flutter_application_2/shared/user_session.dart';
 import '../widgets/make_appointment_button.dart';
 

@@ -5,7 +5,7 @@ import 'package:flutter_application_2/Features/patient_side/book/widget_screen/g
 import 'package:flutter_application_2/Features/patient_side/book/widget_screen/patient_information.dart';
 import 'package:flutter_application_2/Features/patient_side/book/widget_screen/select_date.dart';
 import 'package:flutter_application_2/Features/patient_side/book/widget_screen/text_field_view.dart';
-import 'package:flutter_application_2/models/doctor_model.dart';
+import 'package:flutter_application_2/data/models/doctor_model.dart';
 import '../appointment/your_appointment.dart';
 
 class BookAppointment extends StatefulWidget {

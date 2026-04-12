@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/doctor_side/doctor_profile/widgets/personal_info_widgets/custom_profile_button.dart';
-import 'package:flutter_application_2/services/firestore_services.dart';
+import 'package:flutter_application_2/core/services/firestore_services.dart';
 import 'package:flutter_application_2/shared/user_session.dart';
 
 class CustomGenderSelector extends StatefulWidget {

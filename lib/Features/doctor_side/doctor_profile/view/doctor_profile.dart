@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/Features/doctor_side/doctor_profile/view/personal_info.dart';
+import 'package:flutter_application_2/Features/auth/screens/login_view.dart';
 import 'package:flutter_application_2/Features/doctor_side/doctor_profile/widgets/profile_widgets/custom_doctor_avatar.dart';
 import 'package:flutter_application_2/Features/doctor_side/doctor_profile/widgets/profile_widgets/custom_doctor_navbar.dart';
 import 'package:flutter_application_2/Features/doctor_side/doctor_profile/widgets/profile_widgets/custom_doctor_row.dart';
-import 'package:flutter_application_2/Features/doctor_side/navigation_screen.dart';
-import 'package:flutter_application_2/Features/patient_side/auth/view/login_view.dart';
+import 'package:flutter_application_2/core/routing/navigators/navigation_screen_doc.dart';
 import 'package:flutter_application_2/Features/patient_side/profile/view/settings_page.dart';
 import 'package:flutter_application_2/Features/patient_side/profile/widgets/user_profile/logout_dialog.dart';
-import 'package:flutter_application_2/services/auth_services.dart';
+import 'package:flutter_application_2/core/services/auth_services.dart';
 import 'package:flutter_application_2/shared/user_session.dart';
 
 class DoctorProfile extends StatefulWidget {
@@ -29,7 +28,7 @@ class _DoctorProfileState extends State<DoctorProfile> {
       backgroundColor: Colors.white,
       appBar: CustomDoctorNavbar(
         onPress: () {
-          Navigator.push(context, MaterialPageRoute(builder: (context)=>  NavigationScreen()));
+          Navigator.push(context, MaterialPageRoute(builder: (context)=>  NavigationnScreendoc()));
         },
       ),
 

@@ -2,7 +2,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/core2/constants/colors.dart';
+import 'package:flutter_application_2/core/constants/colors2.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

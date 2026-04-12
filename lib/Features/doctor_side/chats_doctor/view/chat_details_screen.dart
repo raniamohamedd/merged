@@ -1,8 +1,4 @@
-import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 
 /// ---------------- ENUM ----------------
 enum MessageType { text, image, audio }
