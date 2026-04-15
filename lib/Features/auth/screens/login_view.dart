@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/auth/screens/forget_password_2.dart';
 import 'package:flutter_application_2/Features/auth/widgets/login_widgets/login_form.dart';
@@ -8,9 +7,9 @@ import 'package:flutter_application_2/Features/auth/widgets/shared/custom_button
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/routing/navigators/navigation_screen_doc.dart';
 import 'package:flutter_application_2/core/routing/navigators/navigator_patient.dart';
+import 'package:flutter_application_2/core/services/api_service.dart';
 import 'package:flutter_application_2/shared/user_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -33,162 +32,59 @@ class _LoginScreenState extends State<LoginScreen> {
     passwordController.dispose();
     super.dispose();
   }
+Future<void> handleLogin() async {
+  if (!formKey.currentState!.validate()) return;
 
-  Future<Map<String, dynamic>> login(String email, String password) async {
-    final url = Uri.parse(
-      "https://medpal-production-2abe.up.railway.app/auth/login",
-    );
+  setState(() {
+    loading = true;
+  });
 
-    final response = await http.post(
-      url,
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      body: jsonEncode({
-        "email": email,
-        "password": password,
-      }),
-    );
+  try {
+    final response = isPatient
+        ? await ApiService.login(
+            email: emailController.text.trim(),
+            password: passwordController.text.trim(),
+          )
+        : await ApiService.logindoc(
+            email: emailController.text.trim(),
+            password: passwordController.text.trim(),
+          );
 
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception("Failed to login");
-    }
-  }
+    final prefs = await SharedPreferences.getInstance();
 
-  Future<void> handleLogin() async {
-    if (!formKey.currentState!.validate()) return;
+final data = response;
+
+final tokenData = data["token"];
+
+final accessToken = tokenData["accessToken"];
+final refreshToken = tokenData["refreshToken"];
+
+    await prefs.setBool("isLoggedIn", true);
+    await prefs.setString("accessToken", accessToken);
+    await prefs.setString("refreshToken", refreshToken);
+    await prefs.setString("role", isPatient ? "patient" : "doctor");
+
+    UserSession.accessToken = accessToken;
+    UserSession.refreshToken = refreshToken;
+
+    if (!mounted) return;
 
     setState(() {
-      loading = true;
+      loading = false;
     });
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-
-      await prefs.setBool("isLoggedIn", true);
-      await prefs.setString("accessToken", "dummy_token");
-      await prefs.setString("refreshToken", "dummy_refresh");
-      await prefs.setString("role", isPatient ? "patient" : "doctor");
-
-      UserSession.accessToken = "dummy_token";
-      UserSession.refreshToken = "dummy_refresh";
-
-      setState(() {
-        loading = false;
-      });
-
-      showSuccessDialog();
-    } catch (e) {
-      setState(() {
-        loading = false;
-      });
-
-      showErrorDialog();
-    }
-  }
-
-  void showSuccessDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(.08),
-                  blurRadius: 30,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 75,
-                  height: 75,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.blueColor.withOpacity(.1),
-                  ),
-                  child: Icon(
-                    Icons.check_circle,
-                    size: 40,
-                    color: AppColors.blueColor,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  "Login Successful",
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isPatient
-                      ? "Welcome back! You are logged in as a patient."
-                      : "Welcome doctor! You are logged in successfully.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    fontSize: 14,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.blueColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.pop(context);
-
-                      if (isPatient) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => NavigationnScreen(),
-                          ),
-                        );
-                      } else {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => NavigationnScreendoc(),
-                          ),
-                        );
-                      }
-                    },
-                    child: const Text("Continue"),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    showSuccessToastAndNavigate(
+      isPatient ? "patient" : "doctor",
     );
-  }
+  } catch (e) {
+    setState(() {
+      loading = false;
+    });
 
-  void showErrorDialog() {
+    showErrorDialog(e.toString());
+  }
+}
+ void showErrorDialog(String message) {
     showDialog(
       context: context,
       builder: (_) {
@@ -233,7 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Something went wrong. Please try again.",
+                  message.isEmpty ? "Something went wrong. Please try again." : message,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.grey.shade700,
@@ -302,17 +198,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     Icon(
                       Icons.person_outline,
-                      color: isPatient
-                          ? AppColors.blueColor
-                          : Colors.black54,
+                      color: isPatient ? AppColors.blueColor : Colors.black54,
                     ),
                     const SizedBox(width: 8),
                     Text(
                       "Patient",
                       style: TextStyle(
-                        color: isPatient
-                            ? AppColors.blueColor
-                            : Colors.black54,
+                        color: isPatient ? AppColors.blueColor : Colors.black54,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -348,17 +240,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     Icon(
                       Icons.medical_services_outlined,
-                      color: !isPatient
-                          ? AppColors.blueColor
-                          : Colors.black54,
+                      color: !isPatient ? AppColors.blueColor : Colors.black54,
                     ),
                     const SizedBox(width: 8),
                     Text(
                       "Doctor",
                       style: TextStyle(
-                        color: !isPatient
-                            ? AppColors.blueColor
-                            : Colors.black54,
+                        color: !isPatient ? AppColors.blueColor : Colors.black54,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -370,6 +258,87 @@ class _LoginScreenState extends State<LoginScreen> {
         ],
       ),
     );
+  }
+
+  void showSuccessToastAndNavigate(String role) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry overlayEntry;
+
+    overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 110,
+        left: 24,
+        right: 24,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.08),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+              border: Border.all(
+                color: AppColors.blueColor.withOpacity(.12),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: AppColors.blueColor.withOpacity(.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.check,
+                    color: AppColors.blueColor,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    role == "patient"
+                        ? "Logged in successfully as patient"
+                        : "Logged in successfully as doctor",
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(overlayEntry);
+
+    Future.delayed(const Duration(seconds: 2), () {
+      overlayEntry.remove();
+
+      if (!mounted) return;
+
+      if (role == "patient") {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => NavigationnScreen()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => NavigationnScreendoc()),
+        );
+      }
+    });
   }
 
   @override
@@ -442,85 +411,4 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-  void showSuccessToastAndNavigate() {
-  final overlay = Overlay.of(context);
-  late OverlayEntry overlayEntry;
-
-  overlayEntry = OverlayEntry(
-    builder: (context) => Positioned(
-      top: 110,
-      left: 24,
-      right: 24,
-      child: Material(
-        color: Colors.transparent,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(.08),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-            border: Border.all(
-              color: AppColors.blueColor.withOpacity(.12),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.blueColor.withOpacity(.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.check,
-                  color: AppColors.blueColor,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  isPatient
-                      ? "Logged in successfully as patient"
-                      : "Logged in successfully as doctor",
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
-
-  overlay.insert(overlayEntry);
-
-  Future.delayed(const Duration(seconds: 2), () {
-    overlayEntry.remove();
-
-    if (!mounted) return;
-
-    if (isPatient) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => NavigationnScreen()),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => NavigationnScreendoc()),
-      );
-    }
-  });
-}
 }

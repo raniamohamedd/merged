@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_application_2/Features/auth/screens/login_view.dart';
@@ -6,6 +9,7 @@ import 'package:flutter_application_2/Features/auth/widgets/shared/custom_button
 import 'package:flutter_application_2/Features/auth/widgets/shared/custom_textfeild.dart';
 import 'package:flutter_application_2/Features/auth/widgets/signup_widgets/signup_header.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/core/services/api_service.dart';
 import 'package:intl/intl.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
 
@@ -31,6 +35,8 @@ class _SignupViewState extends State<SignupView> {
       TextEditingController();
   final TextEditingController licenseNumberController =
       TextEditingController();
+  final TextEditingController qualificationController =
+      TextEditingController();
 
   String gender = "Male";
   String selectedRole = "Patient";
@@ -39,6 +45,7 @@ class _SignupViewState extends State<SignupView> {
 
   String? selectedSpecialization;
   String? selectedProofFileName;
+  File? selectedProofFile;
   String? clinicLocation;
 
   final List<String> specializations = [
@@ -68,30 +75,18 @@ class _SignupViewState extends State<SignupView> {
     "Assiut, Egypt",
   ];
 
-  Future<void> pickDOB() async {
-    final DateTime initialDate = DateTime(2000, 1, 1);
-    final DateTime firstDate = DateTime(1900);
-    final DateTime lastDate = DateTime.now();
-
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: selectedDOB ?? initialDate,
-      firstDate: firstDate,
-      lastDate: lastDate,
+  Future<void> pickProofFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
     );
 
-    if (picked != null) {
+    if (result != null && result.files.single.path != null) {
       setState(() {
-        selectedDOB = picked;
-        dobController.text = DateFormat("yyyy-MM-dd").format(picked);
+        selectedProofFile = File(result.files.single.path!);
+        selectedProofFileName = result.files.single.name;
       });
     }
-  }
-
-  void fakePickFile() {
-    setState(() {
-      selectedProofFileName = "medical_license.pdf";
-    });
   }
 
   Future<void> chooseClinicLocation() async {
@@ -159,11 +154,16 @@ class _SignupViewState extends State<SignupView> {
   Future<void> handleSignUp() async {
     if (!formKey.currentState!.validate()) return;
 
+    if (selectedDOB == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select date of birth")),
+      );
+      return;
+    }
+
     if (passwordController.text != confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Passwords do not match"),
-        ),
+        const SnackBar(content: Text("Passwords do not match")),
       );
       return;
     }
@@ -171,27 +171,28 @@ class _SignupViewState extends State<SignupView> {
     if (selectedRole == "Doctor") {
       if (selectedSpecialization == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Please select specialization"),
-          ),
+          const SnackBar(content: Text("Please select specialization")),
         );
         return;
       }
 
       if (clinicLocation == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Please choose clinic location"),
-          ),
+          const SnackBar(content: Text("Please choose clinic location")),
         );
         return;
       }
 
-      if (selectedProofFileName == null) {
+      if (selectedProofFile == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Please upload proof document"),
-          ),
+          const SnackBar(content: Text("Please upload proof document")),
+        );
+        return;
+      }
+
+      if (qualificationController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Please enter qualification")),
         );
         return;
       }
@@ -200,27 +201,45 @@ class _SignupViewState extends State<SignupView> {
     setState(() {
       loading = true;
     });
+try {
+  final response = await ApiService.signupPatient(
+    fullName: fullNameController.text.trim(),
+    userName: userNameController.text.trim(),
+    email: emailController.text.trim(),
+    password: passwordController.text.trim(),
+    confirmPassword: confirmPasswordController.text.trim(),
+    gender: gender.toLowerCase(),
+    role: "Patiant",
+    dob: dobController.text.trim(),
+    phone: phoneController.text.trim(),
+  );
 
-    await Future.delayed(const Duration(seconds: 1));
+  print("🔥 Signup Response: $response");
 
-    if (!mounted) return;
+  setState(() {
+    loading = false;
+  });
 
-    setState(() {
-      loading = false;
-    });
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => OtpScreen(
+        email: emailController.text.trim(),
+      ),
+    ),
+  );
 
-    if (selectedRole == "Patient") {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => OtpScreen(
-            email: emailController.text.trim(),
-          ),
-        ),
-      );
-    } else {
-      showDoctorRequestDialog();
-    }
+} catch (e) {
+  setState(() {
+    loading = false;
+  });
+
+  print("❌ Error: $e");
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(e.toString())),
+  );
+}
   }
 
   void showDoctorRequestDialog() {
@@ -538,41 +557,502 @@ class _SignupViewState extends State<SignupView> {
     );
   }
 
-  Widget buildSpecializationDropdown() {
+  Widget buildDoctorFields() {
     if (selectedRole != "Doctor") return const SizedBox.shrink();
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.blueColor.withOpacity(.35)),
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
-      ),
-      child: DropdownButtonFormField<String>(
-        value: selectedSpecialization,
-        decoration: const InputDecoration(
-          border: InputBorder.none,
-          icon: Icon(Icons.local_hospital_outlined),
+    return Column(
+      children: [
+        const SizedBox(height: 16),
+        buildSpecializationField(),
+        const SizedBox(height: 16),
+        CustomTextField(
+          label: "License Number",
+          icon: Icons.badge_outlined,
+          controller: licenseNumberController,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          validator: (v) {
+            if (selectedRole == "Doctor" && (v == null || v.isEmpty)) {
+              return "Enter license number";
+            }
+            return null;
+          },
         ),
-        hint: const Text("Select Specialization"),
-        isExpanded: true,
-        items: specializations.map((spec) {
-          return DropdownMenuItem<String>(
-            value: spec,
-            child: Text(spec),
-          );
-        }).toList(),
-        onChanged: (value) {
-          setState(() {
-            selectedSpecialization = value;
-          });
-        },
-        validator: (value) {
-          if (selectedRole == "Doctor" && value == null) {
-            return "Please select specialization";
-          }
-          return null;
-        },
+        const SizedBox(height: 16),
+        CustomTextField(
+          label: "Years of Experience",
+          icon: Icons.work_outline,
+          controller: yearsOfExperienceController,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          validator: (v) {
+            if (selectedRole == "Doctor" && (v == null || v.isEmpty)) {
+              return "Enter years of experience";
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        CustomTextField(
+          label: "Qualification",
+          icon: Icons.school_outlined,
+          controller: qualificationController,
+          validator: (v) {
+            if (selectedRole == "Doctor" && (v == null || v.isEmpty)) {
+              return "Enter qualification";
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        buildClinicLocationPicker(),
+        const SizedBox(height: 16),
+        buildProofUploadBox(),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    userNameController.dispose();
+    fullNameController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    dobController.dispose();
+    phoneController.dispose();
+    yearsOfExperienceController.dispose();
+    licenseNumberController.dispose();
+    qualificationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isPatient = selectedRole == "Patient";
+
+    return ModalProgressHUD(
+      inAsyncCall: loading,
+      child: Scaffold(
+        backgroundColor: AppColors.whiteColor,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 8),
+                  IconButton(
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const LoginScreen(),
+                        ),
+                      );
+                    },
+                    icon: Icon(
+                      Icons.arrow_back_ios_new_outlined,
+                      size: 20,
+                      color: AppColors.greyColor,
+                    ),
+                  ),
+                  SignupHeader(
+                    Create: "Create Account",
+                    Join: "Join our healthcare community",
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    child: Form(
+                      key: formKey,
+                      child: Column(
+                        children: [
+                          buildRoleSelector(),
+                          const SizedBox(height: 20),
+                          CustomTextField(
+                            label: "Full Name",
+                            icon: Icons.person,
+                            controller: fullNameController,
+                            validator: (v) => v == null || v.isEmpty
+                                ? "Enter full name"
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "User Name",
+                            icon: Icons.person_outline,
+                            controller: userNameController,
+                            validator: (v) => v == null || v.isEmpty
+                                ? "Enter user name"
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Email",
+                            icon: Icons.email_outlined,
+                            controller: emailController,
+                            validator: (v) =>
+                                v == null || v.isEmpty ? "Enter email" : null,
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Password",
+                            icon: Icons.lock_outline,
+                            controller: passwordController,
+                            isPassword: true,
+                            validator: (v) {
+                              if (v == null || v.isEmpty) {
+                                return "Enter password";
+                              }
+                              if (v.length < 8) {
+                                return "Password must be at least 8 chars";
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Confirm Password",
+                            icon: Icons.lock_reset_outlined,
+                            controller: confirmPasswordController,
+                            isPassword: true,
+                            validator: (v) => v == null || v.isEmpty
+                                ? "Confirm your password"
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Phone Number",
+                            icon: Icons.phone_outlined,
+                            controller: phoneController,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(11),
+                            ],
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return "Enter your phone number";
+                              }
+
+                              if (value.length != 11) {
+                                return "Phone number must be 11 digits";
+                              }
+
+                              if (!value.startsWith("01")) {
+                                return "Phone must start with 01";
+                              }
+
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          buildGenderSelector(),
+                          const SizedBox(height: 16),
+                          buildDobField(),
+                          buildDoctorFields(),
+                          const SizedBox(height: 24),
+                          CustomButton(
+                            text: isPatient
+                                ? "Sign Up as Patient"
+                                : "Apply as Doctor",
+                            onPressed: handleSignUp,
+                          ),
+                          const SizedBox(height: 16),
+                          if (!isPatient)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: AppColors.blueColor.withOpacity(.06),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: AppColors.blueColor.withOpacity(.14),
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    color: AppColors.blueColor,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      "Doctor accounts are reviewed manually before approval.",
+                                      style: TextStyle(
+                                        color: Colors.grey.shade800,
+                                        fontSize: 13,
+                                        height: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          const SizedBox(height: 18),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text("Already have an account? "),
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const LoginScreen(),
+                                    ),
+                                  );
+                                },
+                                child: Text(
+                                  "Login",
+                                  style: TextStyle(
+                                    color: AppColors.blueColor,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget buildSpecializationField() {
+    if (selectedRole != "Doctor") return const SizedBox.shrink();
+
+    return GestureDetector(
+      onTap: showSpecializationSheet,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.blueColor.withOpacity(.35)),
+          borderRadius: BorderRadius.circular(18),
+          color: Colors.white,
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.local_hospital_outlined, color: AppColors.blueColor),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                selectedSpecialization ?? "Select Specialization",
+                style: TextStyle(
+                  color:
+                      selectedSpecialization == null ? Colors.grey : Colors.black,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const Icon(Icons.keyboard_arrow_down),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void showSpecializationSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: SizedBox(
+            height: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 45,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                Row(
+                  children: [
+                    Icon(Icons.local_hospital, color: AppColors.blueColor),
+                    const SizedBox(width: 8),
+                    const Text(
+                      "Choose Specialization",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 15),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: specializations.length,
+                    itemBuilder: (context, index) {
+                      final spec = specializations[index];
+                      final isSelected = spec == selectedSpecialization;
+
+                      return ListTile(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        tileColor: isSelected
+                            ? AppColors.blueColor.withOpacity(.1)
+                            : null,
+                        title: Text(spec),
+                        trailing: isSelected
+                            ? Icon(Icons.check, color: AppColors.blueColor)
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            selectedSpecialization = spec;
+                          });
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> showDobPickerSheet() async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 45,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Icon(Icons.cake_outlined, color: AppColors.blueColor),
+                  const SizedBox(width: 8),
+                  const Text(
+                    "Choose Date of Birth",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                selectedDOB == null
+                    ? "No date selected yet"
+                    : "Selected: ${DateFormat("yyyy-MM-dd").format(selectedDOB!)}",
+                style: TextStyle(
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.blueColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(context);
+
+                    final DateTime? picked = await showDatePicker(
+                      context: context,
+                      initialDate: selectedDOB ?? DateTime(2000, 1, 1),
+                      firstDate: DateTime(1900),
+                      lastDate: DateTime.now(),
+                    );
+
+                    if (picked != null) {
+                      setState(() {
+                        selectedDOB = picked;
+                        dobController.text =
+                            DateFormat("yyyy-MM-dd").format(picked);
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.calendar_month),
+                  label: const Text("Pick Date"),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget buildDobField() {
+    return GestureDetector(
+      onTap: showDobPickerSheet,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.blueColor.withOpacity(.35)),
+          borderRadius: BorderRadius.circular(18),
+          color: Colors.white,
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.calendar_today_outlined, color: AppColors.blueColor),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                selectedDOB == null
+                    ? "Select Date of Birth"
+                    : DateFormat("yyyy-MM-dd").format(selectedDOB!),
+                style: TextStyle(
+                  color: selectedDOB == null ? Colors.grey : Colors.black,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const Icon(Icons.keyboard_arrow_down),
+          ],
+        ),
       ),
     );
   }
@@ -684,7 +1164,7 @@ class _SignupViewState extends State<SignupView> {
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              onPressed: fakePickFile,
+              onPressed: pickProofFile,
               icon: const Icon(Icons.attach_file),
               label: const Text("Upload Proof"),
             ),
@@ -693,499 +1173,4 @@ class _SignupViewState extends State<SignupView> {
       ),
     );
   }
-
-  Widget buildDoctorFields() {
-    if (selectedRole != "Doctor") return const SizedBox.shrink();
-
-    return Column(
-      children: [
-        const SizedBox(height: 16),
-        buildSpecializationField(),
-        const SizedBox(height: 16),
-     CustomTextField(
-  label: "License Number",
-  icon: Icons.badge_outlined,
-  controller: licenseNumberController,
-  keyboardType: TextInputType.number,
-  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-  validator: (v) {
-    if (selectedRole == "Doctor" && (v == null || v.isEmpty)) {
-      return "Enter license number";
-    }
-    return null;
-  },
-),   const SizedBox(height: 16),
-     CustomTextField(
-  label: "Years of Experience",
-  icon: Icons.work_outline,
-  controller: yearsOfExperienceController,
-  keyboardType: TextInputType.number,
-  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-  validator: (v) {
-    if (selectedRole == "Doctor" && (v == null || v.isEmpty)) {
-      return "Enter years of experience";
-    }
-    return null;
-  },
-),   const SizedBox(height: 16),
-        buildClinicLocationPicker(),
-        const SizedBox(height: 16),
-        buildProofUploadBox(),
-      ],
-    );
-  }
-
-  @override
-  void dispose() {
-    userNameController.dispose();
-    fullNameController.dispose();
-    emailController.dispose();
-    passwordController.dispose();
-    confirmPasswordController.dispose();
-    dobController.dispose();
-    phoneController.dispose();
-    yearsOfExperienceController.dispose();
-    licenseNumberController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isPatient = selectedRole == "Patient";
-
-    return ModalProgressHUD(
-      inAsyncCall: loading,
-      child: Scaffold(
-        backgroundColor: AppColors.whiteColor,
-        body: SafeArea(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 8),
-                  IconButton(
-                    onPressed: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const LoginScreen(),
-                        ),
-                      );
-                    },
-                    icon: Icon(
-                      Icons.arrow_back_ios_new_outlined,
-                      size: 20,
-                      color: AppColors.greyColor,
-                    ),
-                  ),
-                  SignupHeader(
-                    Create: "Create Account",
-                    Join: "Join our healthcare community",
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    child: Form(
-                      key: formKey,
-                      child: Column(
-                        children: [
-                          buildRoleSelector(),
-                          const SizedBox(height: 20),
-                          CustomTextField(
-                            label: "Full Name",
-                            icon: Icons.person,
-                            controller: fullNameController,
-                            validator: (v) =>
-                                v == null || v.isEmpty ? "Enter full name" : null,
-                          ),
-                          const SizedBox(height: 16),
-                          CustomTextField(
-                            label: "User Name",
-                            icon: Icons.person_outline,
-                            controller: userNameController,
-                            validator: (v) =>
-                                v == null || v.isEmpty ? "Enter user name" : null,
-                          ),
-                          const SizedBox(height: 16),
-                          CustomTextField(
-                            label: "Email",
-                            icon: Icons.email_outlined,
-                            controller: emailController,
-                            validator: (v) =>
-                                v == null || v.isEmpty ? "Enter email" : null,
-                          ),
-                          const SizedBox(height: 16),
-                          CustomTextField(
-                            label: "Password",
-                            icon: Icons.lock_outline,
-                            controller: passwordController,
-                            isPassword: true,
-                            validator: (v) {
-                              if (v == null || v.isEmpty) {
-                                return "Enter password";
-                              }
-                              if (v.length < 8) {
-                                return "Password must be at least 8 chars";
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          CustomTextField(
-                            label: "Confirm Password",
-                            icon: Icons.lock_reset_outlined,
-                            controller: confirmPasswordController,
-                            isPassword: true,
-                            validator: (v) => v == null || v.isEmpty
-                                ? "Confirm your password"
-                                : null,
-                          ),
-                          const SizedBox(height: 16),
-                       CustomTextField(
-  label: "Phone Number",
-  icon: Icons.phone_outlined,
-  controller: phoneController,
-  keyboardType: TextInputType.number,
-  inputFormatters: [
-    FilteringTextInputFormatter.digitsOnly, // أرقام بس
-    LengthLimitingTextInputFormatter(11),   // أقصى 11 رقم
-  ],
-  validator: (value) {
-    if (value == null || value.isEmpty) {
-      return "Enter your phone number";
-    }
-
-    if (value.length != 11) {
-      return "Phone number must be 11 digits";
-    }
-
-    if (!value.startsWith("01")) {
-      return "Phone must start with 01";
-    }
-
-    return null;
-  },
-),   const SizedBox(height: 16),
-                          buildGenderSelector(),
-                          const SizedBox(height: 16),
-                  buildDobField(),
-if (selectedDOB == null)
-  // Padding(
-  //   padding: const EdgeInsets.only(top: 8, left: 4),
-  //   child: Align(
-  //     alignment: Alignment.centerLeft,
-  //     child: Text(
-  //       "Select date of birth",
-  //       style: TextStyle(
-  //         color: AppColors.redColor,
-  //         fontSize: 12,
-  //       ),
-  //     ),
-  //   ),
-  // ),   
-       buildDoctorFields(),
-                          const SizedBox(height: 24),
-                          CustomButton(
-                            text: isPatient
-                                ? "Sign Up as Patient"
-                                : "Apply as Doctor",
-                            onPressed: handleSignUp,
-                          ),
-                          const SizedBox(height: 16),
-                          if (!isPatient)
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: AppColors.blueColor.withOpacity(.06),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: AppColors.blueColor.withOpacity(.14),
-                                ),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(
-                                    Icons.info_outline,
-                                    color: AppColors.blueColor,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      "Doctor accounts are reviewed manually before approval.",
-                                      style: TextStyle(
-                                        color: Colors.grey.shade800,
-                                        fontSize: 13,
-                                        height: 1.5,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          const SizedBox(height: 18),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text("Already have an account? "),
-                              GestureDetector(
-                                onTap: () {
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const LoginScreen(),
-                                    ),
-                                  );
-                                },
-                                child: Text(
-                                  "Login",
-                                  style: TextStyle(
-                                    color: AppColors.blueColor,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-  Widget buildSpecializationField() {
-  if (selectedRole != "Doctor") return const SizedBox.shrink();
-
-  return GestureDetector(
-    onTap: showSpecializationSheet,
-    child: Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.blueColor.withOpacity(.35)),
-        borderRadius: BorderRadius.circular(18),
-        color: Colors.white,
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.local_hospital_outlined,
-              color: AppColors.blueColor),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              selectedSpecialization ?? "Select Specialization",
-              style: TextStyle(
-                color: selectedSpecialization == null
-                    ? Colors.grey
-                    : Colors.black,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const Icon(Icons.keyboard_arrow_down),
-        ],
-      ),
-    ),
-  );
-}
-  void showSpecializationSheet() {
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-    ),
-    builder: (context) {
-      return Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 45,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-            const SizedBox(height: 15),
-            Row(
-              children: [
-                Icon(Icons.local_hospital,
-                    color: AppColors.blueColor),
-                const SizedBox(width: 8),
-                const Text(
-                  "Choose Specialization",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 15),
-
-            // القائمة
-            Expanded(
-              child: ListView.builder(
-                itemCount: specializations.length,
-                itemBuilder: (context, index) {
-                  final spec = specializations[index];
-                  final isSelected = spec == selectedSpecialization;
-
-                  return ListTile(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    tileColor: isSelected
-                        ? AppColors.blueColor.withOpacity(.1)
-                        : null,
-                    title: Text(spec),
-                    trailing: isSelected
-                        ? Icon(Icons.check,
-                            color: AppColors.blueColor)
-                        : null,
-                    onTap: () {
-                      setState(() {
-                        selectedSpecialization = spec;
-                      });
-                      Navigator.pop(context);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      );
-    },
-  );
-}
-Future<void> showDobPickerSheet() async {
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-    ),
-    builder: (context) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 45,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Icon(Icons.cake_outlined, color: AppColors.blueColor),
-                const SizedBox(width: 8),
-                const Text(
-                  "Choose Date of Birth",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Text(
-              selectedDOB == null
-                  ? "No date selected yet"
-                  : "Selected: ${DateFormat("yyyy-MM-dd").format(selectedDOB!)}",
-              style: TextStyle(
-                color: Colors.grey.shade700,
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.blueColor,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                onPressed: () async {
-                  Navigator.pop(context);
-
-                  final DateTime? picked = await showDatePicker(
-                    context: context,
-                    initialDate: selectedDOB ?? DateTime(2000, 1, 1),
-                    firstDate: DateTime(1900),
-                    lastDate: DateTime.now(),
-                  );
-
-                  if (picked != null) {
-                    setState(() {
-                      selectedDOB = picked;
-                      dobController.text =
-                          DateFormat("yyyy-MM-dd").format(picked);
-                    });
-                  }
-                },
-                icon: const Icon(Icons.calendar_month),
-                label: const Text("Pick Date"),
-              ),
-            ),
-          ],
-        ),
-      );
-    },
-  );
-}
-Widget buildDobField() {
-  return GestureDetector(
-    onTap: showDobPickerSheet,
-    child: Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.blueColor.withOpacity(.35)),
-        borderRadius: BorderRadius.circular(18),
-        color: Colors.white,
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.calendar_today_outlined, color: AppColors.blueColor),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              selectedDOB == null
-                  ? "Select Date of Birth"
-                  : DateFormat("yyyy-MM-dd").format(selectedDOB!),
-              style: TextStyle(
-                color: selectedDOB == null ? Colors.grey : Colors.black,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const Icon(Icons.keyboard_arrow_down),
-        ],
-      ),
-    ),
-  );
-}
 }

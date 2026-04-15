@@ -136,7 +136,7 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
 
     final request = http.MultipartRequest(
       'PATCH',
-      Uri.parse('https://medpal-production-2abe.up.railway.app/user/image'),
+      Uri.parse('https://medpal-production-e325.up.railway.app/user/image'),
     );
 
     request.headers['Authorization'] = 'Bearer $token';
@@ -196,7 +196,7 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
 
       final response = await http.patch(
         Uri.parse(
-          "https://medpal-production-2abe.up.railway.app/patient/profile",
+          "https://medpal-production-e325.up.railway.app/patient/profile",
         ),
         headers: {
           "Content-Type": "application/json",

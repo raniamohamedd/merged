@@ -51,7 +51,7 @@ class _LoginScreenState extends State<LoginScreendoc> {
 
   // ✅ Function to call login API
   Future<Map<String, dynamic>> login(String email, String password) async {
-    final url = Uri.parse("https://medpal-production-2abe.up.railway.app/auth/login");
+    final url = Uri.parse("https://medpal-production-e325.up.railway.app/auth/login");
     final response = await http.post(
       url,
       headers: {
