@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter_application_2/Features/patient_side/search/search_screen.dart';
 import 'package:flutter_application_2/shared/user_session.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -149,7 +150,55 @@ class ApiService {
     }
   }
 
+static Future<List<Doctor>> getDoctors() async {
+  final prefs = await SharedPreferences.getInstance();
+  final String? token = prefs.getString("accessToken");
+    final String? token2 = prefs.getString("refreshToken");
 
+  print(token);
+  print('huhubhuhbubh');
+   print(token2);
+  print('huhubhuhbubh');
+
+  final url = Uri.parse('$userBaseUrl/getDoctors');
+
+  final response = await http.get(
+    url,
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "Authorization": "Bearer $token",
+    },
+  );
+  print(response);
+
+  final data =
+      response.body.isNotEmpty ? jsonDecode(response.body) : null;
+
+  if (response.statusCode == 200 || response.statusCode == 201) {
+    // حسب شكل الريسبونس من الباك
+    if (data is List) {
+      return data.map((e) => Doctor.fromJson(e)).toList();
+    } else if (data is Map<String, dynamic>) {
+      if (data["doctors"] is List) {
+        return (data["doctors"] as List)
+            .map((e) => Doctor.fromJson(e))
+            .toList();
+      } else if (data["data"] is List) {
+        return (data["data"] as List)
+            .map((e) => Doctor.fromJson(e))
+            .toList();
+      }
+    }
+
+    throw Exception("Unexpected response format: $data");
+  } else {
+    throw Exception(
+      data?["message"] ??
+          "Failed to fetch doctors: ${response.statusCode} - ${response.body}",
+    );
+  }
+}
   static Future<Map<String, dynamic>> logindoc({
     required String email,
     required String password,

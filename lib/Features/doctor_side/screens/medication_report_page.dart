@@ -570,6 +570,7 @@ pw.Widget _pdfSummaryItem(String title, String value, PdfColor color) {
 
   Widget _buildPriorityDropdown() {
     return _customDropdown<String>(
+      
       value: selectedLevel,
       label: "Priority",
       items: const [
