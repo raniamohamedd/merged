@@ -14,6 +14,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool emergencyAlerts = true;
   bool medicationReminders = true;
   bool patientMessages = true;
+  bool isLoading = true;
 
   final fullNameController = TextEditingController();
   final emailController = TextEditingController();
@@ -21,35 +22,31 @@ class _SettingsPageState extends State<SettingsPage> {
   final phoneController = TextEditingController();
   final licenseController = TextEditingController();
 
+  String profileImageUrl = '';
+
   @override
   void initState() {
     super.initState();
     _loadDoctorProfile();
   }
 
-  // استرجاع بيانات بروفايل الطبيب
   Future<void> _loadDoctorProfile() async {
     try {
       final profileData = await ApiService.getDoctorProfile();
+      final data = profileData['data'];
+
       setState(() {
-        fullNameController.text = profileData['data']['fullName'];
-        emailController.text = profileData['data']['email'];
-        specialtyController.text = profileData['data']['specialization'];
-        phoneController.text = profileData['data']['phoneNumber'];
-        licenseController.text = profileData['data']['medicalLicense'];
+        fullNameController.text = data['fullName'] ?? '';
+        emailController.text = data['email'] ?? '';
+        specialtyController.text = data['specialization'] ?? '';
+        phoneController.text = data['phone'] ?? '';
+        licenseController.text = data['licenseNumber']?.toString() ?? '';
+        profileImageUrl = data['profileImage'] ?? '';
+        isLoading = false;
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('فشل تحميل بروفايل الطبيب: $e'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-      );
+      setState(() => isLoading = false);
+      debugPrint('Error loading doctor profile: $e');
     }
   }
 
@@ -60,9 +57,7 @@ class _SettingsPageState extends State<SettingsPage> {
         backgroundColor: AppColors.blueColor,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     );
   }
@@ -96,128 +91,118 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        child: Column(
-          children: [
-            _buildProfileHeader(),
-            const SizedBox(height: 16),
-
-            _buildCard(
-              title: 'Profile Settings',
-              icon: Icons.person_outline,
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               child: Column(
                 children: [
-                  _buildTextField(
-                    label: 'Full Name',
-                    controller: fullNameController,
+                  _buildProfileHeader(),
+                  const SizedBox(height: 16),
+                  _buildCard(
+                    title: 'Profile Settings',
                     icon: Icons.person_outline,
+                    child: Column(
+                      children: [
+                        _buildTextField(
+                          label: 'Full Name',
+                          controller: fullNameController,
+                          icon: Icons.person_outline,
+                        ),
+                        const SizedBox(height: 14),
+                        _buildTextField(
+                          label: 'Email',
+                          controller: emailController,
+                          icon: Icons.email_outlined,
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+                        const SizedBox(height: 14),
+                        _buildTextField(
+                          label: 'Specialty',
+                          controller: specialtyController,
+                          icon: Icons.local_hospital_outlined,
+                        ),
+                        const SizedBox(height: 14),
+                        _buildTextField(
+                          label: 'Phone Number',
+                          controller: phoneController,
+                          icon: Icons.phone_outlined,
+                          keyboardType: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 14),
+                        _buildTextField(
+                          label: 'Medical License',
+                          controller: licenseController,
+                          icon: Icons.badge_outlined,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 14),
-                  _buildTextField(
-                    label: 'Email',
-                    controller: emailController,
-                    icon: Icons.email_outlined,
-                    keyboardType: TextInputType.emailAddress,
+                  const SizedBox(height: 16),
+                  _buildCard(
+                    title: 'Notification Preferences',
+                    icon: Icons.notifications_none_outlined,
+                    child: Column(
+                      children: [
+                        _buildSwitchTile(
+                          title: 'Email Notifications',
+                          subtitle: 'Receive email updates about patients',
+                          value: emailNotifications,
+                          onChanged: (val) =>
+                              setState(() => emailNotifications = val),
+                        ),
+                        _buildDivider(),
+                        _buildSwitchTile(
+                          title: 'Emergency Alerts',
+                          subtitle: 'Get notified of critical patient alerts',
+                          value: emergencyAlerts,
+                          onChanged: (val) =>
+                              setState(() => emergencyAlerts = val),
+                        ),
+                        _buildDivider(),
+                        _buildSwitchTile(
+                          title: 'Medication Reminders',
+                          subtitle: 'Alerts for missed patient medications',
+                          value: medicationReminders,
+                          onChanged: (val) =>
+                              setState(() => medicationReminders = val),
+                        ),
+                        _buildDivider(),
+                        _buildSwitchTile(
+                          title: 'Patient Messages',
+                          subtitle: 'Notifications for new patient messages',
+                          value: patientMessages,
+                          onChanged: (val) =>
+                              setState(() => patientMessages = val),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 14),
-                  _buildTextField(
-                    label: 'Specialty',
-                    controller: specialtyController,
-                    icon: Icons.local_hospital_outlined,
-                  ),
-                  const SizedBox(height: 14),
-                  _buildTextField(
-                    label: 'Phone Number',
-                    controller: phoneController,
-                    icon: Icons.phone_outlined,
-                    keyboardType: TextInputType.phone,
-                  ),
-                  const SizedBox(height: 14),
-                  _buildTextField(
-                    label: 'Medical License',
-                    controller: licenseController,
-                    icon: Icons.badge_outlined,
-                    keyboardType: TextInputType.number,
+                  const SizedBox(height: 22),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: handleSaveSettings,
+                      icon: const Icon(Icons.save_outlined),
+                      label: const Text(
+                        'Save All Settings',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.blueColor,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-
-            const SizedBox(height: 16),
-
-            _buildCard(
-              title: 'Notification Preferences',
-              icon: Icons.notifications_none_outlined,
-              child: Column(
-                children: [
-                  _buildSwitchTile(
-                    title: 'Email Notifications',
-                    subtitle: 'Receive email updates about patients',
-                    value: emailNotifications,
-                    onChanged: (val) {
-                      setState(() => emailNotifications = val);
-                    },
-                  ),
-                  _buildDivider(),
-                  _buildSwitchTile(
-                    title: 'Emergency Alerts',
-                    subtitle: 'Get notified of critical patient alerts',
-                    value: emergencyAlerts,
-                    onChanged: (val) {
-                      setState(() => emergencyAlerts = val);
-                    },
-                  ),
-                  _buildDivider(),
-                  _buildSwitchTile(
-                    title: 'Medication Reminders',
-                    subtitle: 'Alerts for missed patient medications',
-                    value: medicationReminders,
-                    onChanged: (val) {
-                      setState(() => medicationReminders = val);
-                    },
-                  ),
-                  _buildDivider(),
-                  _buildSwitchTile(
-                    title: 'Patient Messages',
-                    subtitle: 'Notifications for new patient messages',
-                    value: patientMessages,
-                    onChanged: (val) {
-                      setState(() => patientMessages = val);
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 22),
-
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: handleSaveSettings,
-                icon: const Icon(Icons.save_outlined),
-                label: const Text(
-                  'Save All Settings',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.blueColor,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -241,33 +226,34 @@ class _SettingsPageState extends State<SettingsPage> {
           CircleAvatar(
             radius: 32,
             backgroundColor: Colors.white.withOpacity(.18),
-            child: const Icon(
-              Icons.person,
-              color: Colors.white,
-              size: 34,
-            ),
+            backgroundImage: profileImageUrl.isNotEmpty
+                ? NetworkImage(profileImageUrl)
+                : null,
+            child: profileImageUrl.isEmpty
+                ? const Icon(Icons.person, color: Colors.white, size: 34)
+                : null,
           ),
           const SizedBox(width: 14),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Doctor Profile',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
+                  fullNameController.text.isNotEmpty
+                      ? 'Dr. ${fullNameController.text}'
+                      : 'Doctor Profile',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
-                  'Manage your information and preferences',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    height: 1.4,
-                  ),
+                  specialtyController.text.isNotEmpty
+                      ? specialtyController.text
+                      : 'Manage your information',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
                 ),
               ],
             ),
@@ -304,19 +290,12 @@ class _SettingsPageState extends State<SettingsPage> {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: AppColors.blueColor.withOpacity(.1),
-                child: Icon(
-                  icon,
-                  color: AppColors.blueColor,
-                  size: 20,
-                ),
+                child: Icon(icon, color: AppColors.blueColor, size: 20),
               ),
               const SizedBox(width: 10),
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -340,30 +319,19 @@ class _SettingsPageState extends State<SettingsPage> {
         filled: true,
         fillColor: AppColors.greyColor.withOpacity(0.04),
         labelText: label,
-        labelStyle: TextStyle(
-          color: AppColors.greyColor,
-          fontSize: 14,
-        ),
-        prefixIcon: Icon(
-          icon,
-          color: AppColors.blueColor,
-        ),
+        labelStyle: TextStyle(color: AppColors.greyColor, fontSize: 14),
+        prefixIcon: Icon(icon, color: AppColors.blueColor),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: AppColors.greyColor.withOpacity(.12),
-          ),
+          borderSide: BorderSide(color: AppColors.greyColor.withOpacity(.12)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: AppColors.blueColor,
-            width: 1.7,
-          ),
+          borderSide: BorderSide(color: AppColors.blueColor, width: 1.7),
         ),
       ),
     );
@@ -394,22 +362,15 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
-                ),
+                Text(title,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 15)),
                 const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 13,
-                    height: 1.4,
-                  ),
-                ),
+                Text(subtitle,
+                    style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
+                        height: 1.4)),
               ],
             ),
           ),
@@ -426,10 +387,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildDivider() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
-      child: Divider(
-        height: 1,
-        color: Colors.grey.shade200,
-      ),
+      child: Divider(height: 1, color: Colors.grey.shade200),
     );
   }
 }

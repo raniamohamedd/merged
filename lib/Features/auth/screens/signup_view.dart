@@ -151,96 +151,91 @@ class _SignupViewState extends State<SignupView> {
     );
   }
 
-  Future<void> handleSignUp() async {
-    if (!formKey.currentState!.validate()) return;
+Future<void> handleSignUp() async {
+  if (!formKey.currentState!.validate()) return;
 
-    if (selectedDOB == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select date of birth")),
-      );
-      return;
-    }
-
-    if (passwordController.text != confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Passwords do not match")),
-      );
-      return;
-    }
-
-    if (selectedRole == "Doctor") {
-      if (selectedSpecialization == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Please select specialization")),
-        );
-        return;
-      }
-
-      if (clinicLocation == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Please choose clinic location")),
-        );
-        return;
-      }
-
-      if (selectedProofFile == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Please upload proof document")),
-        );
-        return;
-      }
-
-      if (qualificationController.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Please enter qualification")),
-        );
-        return;
-      }
-    }
-
-    setState(() {
-      loading = true;
-    });
-try {
-  final response = await ApiService.signupPatient(
-    fullName: fullNameController.text.trim(),
-    userName: userNameController.text.trim(),
-    email: emailController.text.trim(),
-    password: passwordController.text.trim(),
-    confirmPassword: confirmPasswordController.text.trim(),
-    gender: gender.toLowerCase(),
-    role: "Patiant",
-    dob: dobController.text.trim(),
-    phone: phoneController.text.trim(),
-  );
-
-  print("🔥 Signup Response: $response");
-
-  setState(() {
-    loading = false;
-  });
-
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => OtpScreen(
-        email: emailController.text.trim(),
-      ),
-    ),
-  );
-
-} catch (e) {
-  setState(() {
-    loading = false;
-  });
-
-  print("❌ Error: $e");
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(e.toString())),
-  );
-}
+  if (selectedDOB == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Please select date of birth")),
+    );
+    return;
   }
+
+  if (passwordController.text != confirmPasswordController.text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Passwords do not match")),
+    );
+    return;
+  }
+
+  setState(() => loading = true);
+
+  try {
+    /// 🟢 لو Patient
+    if (selectedRole == "Patient") {
+      final response = await ApiService.signupPatient(
+        fullName: fullNameController.text.trim(),
+        userName: userNameController.text.trim(),
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
+        confirmPassword: confirmPasswordController.text.trim(),
+        gender: gender.toLowerCase(),
+        role: "Patient", // ⚠️ كان عندك غلط: Patiant
+        dob: dobController.text.trim(),
+        phone: phoneController.text.trim(),
+      );
+
+      print("🔥 Patient Signup: $response");
+
+      setState(() => loading = false);
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OtpScreen(
+            email: emailController.text.trim(),
+          ),
+        ),
+      );
+    }
+
+    /// 🔵 لو Doctor
+    else {
+      final response = await ApiService.signupDoctor(
+        fullName: fullNameController.text.trim(),
+        userName: userNameController.text.trim(),
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
+        confirmPassword: confirmPasswordController.text.trim(),
+        gender: gender,
+        role: "Doctor",
+        dob: dobController.text.trim(),
+        phone: phoneController.text.trim(),
+        specialization: selectedSpecialization!,
+        licenseNumbers: licenseNumberController.text.trim(),
+        experienceYears: yearsOfExperienceController.text.trim(),
+        qualification: qualificationController.text.trim(),
+        clinicLocation: clinicLocation!,
+        proofDocument: selectedProofFile!,
+      );
+
+      print("🔥 Doctor Signup: $response");
+
+      setState(() => loading = false);
+
+      /// ✅ أهم جزء 👇
+      showDoctorRequestDialog();
+    }
+  } catch (e) {
+    setState(() => loading = false);
+
+    print("❌ Error: $e");
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(e.toString())),
+    );
+  }
+}
 
   void showDoctorRequestDialog() {
     showDialog(

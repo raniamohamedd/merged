@@ -9,6 +9,7 @@ class EmergencyCase {
   final String patientId;
   final String patientName;
   final String time;
+  final DateTime createdAt; // ✅ للترتيب الصحيح
   final String alertType;
   final String status;
   final String severity;
@@ -19,6 +20,7 @@ class EmergencyCase {
     required this.patientId,
     required this.patientName,
     required this.time,
+    required this.createdAt,
     required this.alertType,
     required this.status,
     required this.severity,
@@ -26,28 +28,21 @@ class EmergencyCase {
   });
 
   factory EmergencyCase.fromJson(Map<String, dynamic> json) {
+    final created = DateTime.parse(json['createdAt']);
     return EmergencyCase(
       id: json['_id'],
       patientId: json['patientId']['_id'],
-      patientName: json['patientId']['fullName'] ?? "Unknown",
-
-      time: timeago.format(
-        DateTime.parse(json['createdAt']),
-        locale: 'en_short',
-      ),
-
-      // 🔥 IMPORTANT: match backend enum
-      alertType: json['updateType'] ?? "other",
-
+      patientName: json['patientId']['fullName'] ?? 'Unknown',
+      time: timeago.format(created, locale: 'en_short'),
+      createdAt: created, // ✅ حفظ الوقت الحقيقي للترتيب
+      alertType: json['updateType'] ?? 'other',
       status: json['isResolved'] ? 'resolved' : 'active',
-
-      // temporary until backend sends severity
       severity: 'high',
-
-      details: json['details'] ?? "",
+      details: json['details'] ?? '',
     );
   }
 }
+
 class EmergencyCasesPage extends StatefulWidget {
   const EmergencyCasesPage({super.key});
 
@@ -56,37 +51,36 @@ class EmergencyCasesPage extends StatefulWidget {
 }
 
 class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
-   List<EmergencyCase> emergencyCases = [
-  ];
-  
-  Future<void> loadSos() async {
-  try {
-    final data = await ApiService.getSos();
+  List<EmergencyCase> emergencyCases = [];
+  bool isLoading = true;
 
-    setState(() {
-      emergencyCases =
-          data.map((e) => EmergencyCase.fromJson(e)).toList();
-      isLoading = false;
-    });
-  } catch (e) {
-    print("ERROR: $e");
-    setState(() {
-      isLoading = false;
-    });
+  Future<void> loadSos() async {
+    try {
+      final data = await ApiService.getSos();
+      final cases = data.map((e) => EmergencyCase.fromJson(e)).toList();
+
+      // ✅ ترتيب من الأحدث للأقدم (الأحدث في الأعلى - منطقي)
+      cases.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      setState(() {
+        emergencyCases = cases;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() => isLoading = false);
+    }
   }
-}
-@override
-void initState() {
-  super.initState();
-  loadSos();
-}
-bool isLoading =true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadSos();
+  }
+
   int get activeCount =>
       emergencyCases.where((e) => e.status == 'active').length;
-
   int get resolvedCount =>
       emergencyCases.where((e) => e.status == 'resolved').length;
-
   int get highCount =>
       emergencyCases.where((e) => e.severity == 'high').length;
 
@@ -116,17 +110,13 @@ bool isLoading =true;
     }
   }
 
-  Color statusColor(String status) {
-    return status == 'active'
-        ? const Color(0xFFE74C3C)
-        : const Color(0xFF27AE60);
-  }
+  Color statusColor(String status) => status == 'active'
+      ? const Color(0xFFE74C3C)
+      : const Color(0xFF27AE60);
 
-  Color statusBgColor(String status) {
-    return status == 'active'
-        ? const Color(0xFFE74C3C).withOpacity(.10)
-        : const Color(0xFF27AE60).withOpacity(.10);
-  }
+  Color statusBgColor(String status) => status == 'active'
+      ? const Color(0xFFE74C3C).withOpacity(.10)
+      : const Color(0xFF27AE60).withOpacity(.10);
 
   Widget _softCard({required Widget child}) {
     return Container(
@@ -180,10 +170,7 @@ bool isLoading =true;
             Text(
               value,
               style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
+                  color: color, fontWeight: FontWeight.bold, fontSize: 18),
             ),
             const SizedBox(height: 4),
             Text(
@@ -223,7 +210,8 @@ bool isLoading =true;
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor: severityColor(ec.severity).withOpacity(.10),
+                backgroundColor:
+                    severityColor(ec.severity).withOpacity(.10),
                 child: Icon(
                   Icons.warning_amber_rounded,
                   color: severityColor(ec.severity),
@@ -244,12 +232,17 @@ bool isLoading =true;
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      '${ec.time} ago',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 13,
-                      ),
+                    Row(
+                      children: [
+                        Icon(Icons.access_time,
+                            size: 13, color: Colors.grey.shade500),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${ec.time} ago',
+                          style: TextStyle(
+                              color: Colors.grey.shade600, fontSize: 13),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -258,8 +251,8 @@ bool isLoading =true;
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 11, vertical: 6),
                     decoration: BoxDecoration(
                       color: severityBgColor(ec.severity),
                       borderRadius: BorderRadius.circular(30),
@@ -275,8 +268,8 @@ bool isLoading =true;
                   ),
                   const SizedBox(height: 8),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 11, vertical: 6),
                     decoration: BoxDecoration(
                       color: statusBgColor(ec.status),
                       borderRadius: BorderRadius.circular(30),
@@ -314,10 +307,7 @@ bool isLoading =true;
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: Colors.grey.shade700,
-                fontSize: 13,
-                height: 1.45,
-              ),
+                  color: Colors.grey.shade700, fontSize: 13, height: 1.45),
             ),
           ),
           const SizedBox(height: 14),
@@ -327,16 +317,14 @@ bool isLoading =true;
               onPressed: () {
                 showDialog(
                   context: context,
-                  builder: (_) => EmergencyCaseDialog(emergencyCase: ec),
+                  builder: (_) =>
+                      EmergencyCaseDialog(emergencyCase: ec),
                 );
               },
               icon: const Icon(Icons.remove_red_eye_outlined, size: 18),
               label: const Text(
-                "View Case Details",
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
+                'View Case Details',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.blueColor,
@@ -356,7 +344,6 @@ bool isLoading =true;
 
   Widget _buildEmergencyBanner() {
     if (activeCount == 0) return const SizedBox.shrink();
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -364,19 +351,16 @@ bool isLoading =true;
         color: const Color(0xFFE74C3C).withOpacity(.08),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color(0xFFE74C3C).withOpacity(.14),
-        ),
+            color: const Color(0xFFE74C3C).withOpacity(.14)),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 22,
-            backgroundColor: const Color(0xFFE74C3C).withOpacity(.12),
-            child: const Icon(
-              Icons.warning_amber_rounded,
-              color: Color(0xFFE74C3C),
-              size: 22,
-            ),
+            backgroundColor:
+                const Color(0xFFE74C3C).withOpacity(.12),
+            child: const Icon(Icons.warning_amber_rounded,
+                color: Color(0xFFE74C3C), size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -384,7 +368,7 @@ bool isLoading =true;
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "$activeCount active emergency alert${activeCount > 1 ? 's' : ''}",
+                  '$activeCount active emergency alert${activeCount > 1 ? 's' : ''}',
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
@@ -393,11 +377,9 @@ bool isLoading =true;
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Immediate attention required for critical cases.",
-                  style: TextStyle(
-                    color: Colors.red.shade700,
-                    fontSize: 13,
-                  ),
+                  'Immediate attention required for critical cases.',
+                  style:
+                      TextStyle(color: Colors.red.shade700, fontSize: 13),
                 ),
               ],
             ),
@@ -407,99 +389,18 @@ bool isLoading =true;
     );
   }
 
-  Widget _buildDesktopTable() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowColor: WidgetStateProperty.all(
-          AppColors.blueColor.withOpacity(.08),
-        ),
-        columnSpacing: 28,
-        dataRowMinHeight: 56,
-        dataRowMaxHeight: 68,
-        columns: const [
-          DataColumn(label: Text('Patient')),
-          DataColumn(label: Text('Time')),
-          DataColumn(label: Text('Alert Type')),
-          DataColumn(label: Text('Severity')),
-          DataColumn(label: Text('Status')),
-          DataColumn(label: Text('Action')),
-        ],
-        rows: emergencyCases.map((ec) {
-          return DataRow(
-            cells: [
-              DataCell(Text(ec.patientName)),
-              DataCell(Text(ec.time)),
-              DataCell(Text(ec.alertType)),
-              DataCell(
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: severityBgColor(ec.severity),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: Text(
-                    ec.severity.toUpperCase(),
-                    style: TextStyle(
-                      color: severityColor(ec.severity),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-              DataCell(
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusBgColor(ec.status),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: Text(
-                    ec.status == 'active' ? 'Active' : 'Resolved',
-                    style: TextStyle(
-                      color: statusColor(ec.status),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-              DataCell(
-                TextButton(
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (_) => EmergencyCaseDialog(emergencyCase: ec),
-                    );
-                  },
-                  child: Text(
-                    'View Case',
-                    style: TextStyle(color: AppColors.blueColor),
-                  ),
-                ),
-              ),
-            ],
-          );
-        }).toList(),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 700;
-if (isLoading) {
-  return const Scaffold(
-    body: Center(child: CircularProgressIndicator()),
-  );
-}
+    if (isLoading) {
+      return const Scaffold(
+          body: Center(child: CircularProgressIndicator()));
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7FAFC),
       body: SafeArea(
         child: Column(
           children: [
-            /// HEADER الثابت
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 40, 16, 0),
               child: Container(
@@ -525,11 +426,8 @@ if (isLoading) {
                         color: Colors.white.withOpacity(.18),
                         borderRadius: BorderRadius.circular(18),
                       ),
-                      child: const Icon(
-                        Icons.emergency_outlined,
-                        color: Colors.white,
-                        size: 28,
-                      ),
+                      child: const Icon(Icons.emergency_outlined,
+                          color: Colors.white, size: 28),
                     ),
                     const SizedBox(width: 14),
                     const Expanded(
@@ -546,21 +444,22 @@ if (isLoading) {
                           ),
                           SizedBox(height: 4),
                           Text(
-                            'Critical cases requiring immediate attention',
+                            'Sorted by most recent first',
                             style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                            ),
+                                color: Colors.white70, fontSize: 13),
                           ),
                         ],
                       ),
+                    ),
+                    // ✅ زر Refresh
+                    IconButton(
+                      onPressed: loadSos,
+                      icon: const Icon(Icons.refresh, color: Colors.white),
                     ),
                   ],
                 ),
               ),
             ),
-
-            /// الجزء المتحرك
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -569,21 +468,21 @@ if (isLoading) {
                     Row(
                       children: [
                         _statsCard(
-                          title: "Active",
+                          title: 'Active',
                           value: activeCount.toString(),
                           color: const Color(0xFFE74C3C),
                           icon: Icons.warning_amber_rounded,
                         ),
                         const SizedBox(width: 10),
                         _statsCard(
-                          title: "Resolved",
+                          title: 'Resolved',
                           value: resolvedCount.toString(),
                           color: const Color(0xFF27AE60),
                           icon: Icons.check_circle_outline_rounded,
                         ),
                         const SizedBox(width: 10),
                         _statsCard(
-                          title: "High Risk",
+                          title: 'High Risk',
                           value: highCount.toString(),
                           color: const Color(0xFFF39C12),
                           icon: Icons.priority_high_rounded,
@@ -593,15 +492,39 @@ if (isLoading) {
                     const SizedBox(height: 16),
                     _buildEmergencyBanner(),
                     const SizedBox(height: 16),
-                    _softCard(
-                      child: isMobile
-                          ? Column(
-                              children: emergencyCases
-                                  .map((ec) => buildEmergencyCard(ec))
-                                  .toList(),
-                            )
-                          : _buildDesktopTable(),
-                    ),
+                    emergencyCases.isEmpty
+                        ? _softCard(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 32),
+                              child: Column(
+                                children: [
+                                  Icon(Icons.check_circle_outline,
+                                      size: 60,
+                                      color: Colors.green.shade400),
+                                  const SizedBox(height: 16),
+                                  const Text(
+                                    'No emergency alerts',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'All patients are safe',
+                                    style: TextStyle(
+                                        color: Colors.grey.shade600),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : _softCard(
+                            child: Column(
+                              children:
+                                  emergencyCases.map(buildEmergencyCard).toList(),
+                            ),
+                          ),
                   ],
                 ),
               ),
@@ -613,14 +536,11 @@ if (isLoading) {
   }
 }
 
+// ========== Dialog ==========
 class EmergencyCaseDialog extends StatelessWidget {
   final EmergencyCase emergencyCase;
 
-
-  const EmergencyCaseDialog({
-    super.key,
-    required this.emergencyCase,
-  });
+  const EmergencyCaseDialog({super.key, required this.emergencyCase});
 
   Color severityColor(String severity) {
     switch (severity) {
@@ -628,37 +548,13 @@ class EmergencyCaseDialog extends StatelessWidget {
         return const Color(0xFFE74C3C);
       case 'medium':
         return const Color(0xFFF39C12);
-      case 'low':
-        return const Color(0xFFF1C40F);
       default:
         return Colors.grey;
     }
   }
 
-  Color severityBgColor(String severity) {
-    switch (severity) {
-      case 'high':
-        return const Color(0xFFE74C3C).withOpacity(.10);
-      case 'medium':
-        return const Color(0xFFF39C12).withOpacity(.10);
-      case 'low':
-        return const Color(0xFFF1C40F).withOpacity(.10);
-      default:
-        return Colors.grey.shade100;
-    }
-  }
-
-  Color statusColor(String status) {
-    return status == 'active'
-        ? const Color(0xFFE74C3C)
-        : const Color(0xFF27AE60);
-  }
-
-  Color statusBgColor(String status) {
-    return status == 'active'
-        ? const Color(0xFFE74C3C).withOpacity(.10)
-        : const Color(0xFF27AE60).withOpacity(.10);
-  }
+  Color statusColor(String status) =>
+      status == 'active' ? const Color(0xFFE74C3C) : const Color(0xFF27AE60);
 
   @override
   Widget build(BuildContext context) {
@@ -685,40 +581,33 @@ class EmergencyCaseDialog extends StatelessWidget {
                 radius: 30,
                 backgroundColor:
                     severityColor(emergencyCase.severity).withOpacity(.10),
-                child: Icon(
-                  Icons.warning_amber_rounded,
-                  size: 28,
-                  color: severityColor(emergencyCase.severity),
-                ),
+                child: Icon(Icons.warning_amber_rounded,
+                    size: 28,
+                    color: severityColor(emergencyCase.severity)),
               ),
               const SizedBox(height: 14),
               const Text(
-                "Emergency Case Details",
+                'Emergency Case Details',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+                style:
+                    TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 18),
-
-              _detailRow("Patient", emergencyCase.patientName),
+              _detailRow('Patient', emergencyCase.patientName),
               const SizedBox(height: 10),
-              _detailRow("Time", emergencyCase.time),
+              _detailRow('Time', '${emergencyCase.time} ago'),
               const SizedBox(height: 10),
-              _detailRow("Alert Type", emergencyCase.alertType),
+              _detailRow('Alert Type', emergencyCase.alertType),
               const SizedBox(height: 14),
-
               Row(
                 children: [
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
+                          horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
-                        color: severityBgColor(emergencyCase.severity),
+                        color: severityColor(emergencyCase.severity)
+                            .withOpacity(.10),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Center(
@@ -736,11 +625,10 @@ class EmergencyCaseDialog extends StatelessWidget {
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
+                          horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
-                        color: statusBgColor(emergencyCase.status),
+                        color: statusColor(emergencyCase.status)
+                            .withOpacity(.10),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Center(
@@ -758,9 +646,7 @@ class EmergencyCaseDialog extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 16),
-
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
@@ -771,19 +657,15 @@ class EmergencyCaseDialog extends StatelessWidget {
                 child: Text(
                   emergencyCase.details,
                   style: TextStyle(
-                    color: Colors.grey.shade800,
-                    fontSize: 13,
-                    height: 1.5,
-                  ),
+                      color: Colors.grey.shade800,
+                      fontSize: 13,
+                      height: 1.5),
                 ),
               ),
-
               const SizedBox(height: 20),
-
               SizedBox(
                 width: double.infinity,
-                child: 
-                ElevatedButton.icon(
+                child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.blueColor,
                     foregroundColor: Colors.white,
@@ -798,13 +680,13 @@ class EmergencyCaseDialog extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-builder: (_) => PatientDetailsPage(
-  patientId: emergencyCase.patientId,
-),                      ),
+                        builder: (_) => PatientDetailsPage(
+                            patientId: emergencyCase.patientId),
+                      ),
                     );
                   },
                   icon: const Icon(Icons.person_outline),
-                  label: const Text("View Patient Details"),
+                  label: const Text('View Patient Details'),
                 ),
               ),
               const SizedBox(height: 10),
@@ -820,7 +702,7 @@ builder: (_) => PatientDetailsPage(
                     ),
                   ),
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("Close"),
+                  child: const Text('Close'),
                 ),
               ),
             ],
@@ -836,24 +718,18 @@ builder: (_) => PatientDetailsPage(
       children: [
         SizedBox(
           width: 82,
-          child: Text(
-            "$label:",
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF6B7280),
-              fontSize: 13,
-            ),
-          ),
+          child: Text('$label:',
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF6B7280),
+                  fontSize: 13)),
         ),
         Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1F2937),
-              fontSize: 13,
-            ),
-          ),
+          child: Text(value,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1F2937),
+                  fontSize: 13)),
         ),
       ],
     );

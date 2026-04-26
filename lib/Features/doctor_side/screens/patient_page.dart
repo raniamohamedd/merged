@@ -4,9 +4,7 @@ import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
 
 class Patient {
-
-  final String userId;   // user id (IMPORTANT)
- 
+  final String userId;
   final String id;
   final String name;
   final int age;
@@ -14,27 +12,28 @@ class Patient {
   final String status;
 
   Patient({
-        required this.userId,
-
+    required this.userId,
     required this.id,
     required this.name,
     required this.age,
     required this.medicationCount,
     required this.status,
   });
-  static String _getStatus(Map<String, dynamic> json) {
-  final diseases = json['chronicDiseases'] as List?;
-  if (diseases != null && diseases.isNotEmpty) {
-    return diseases[0]['status'] ?? 'stable';
-  }
-  return 'stable';
-}factory Patient.fromJson(Map<String, dynamic> json) {
-  final user = json['userId'] ?? {};
 
+  static String _getStatus(Map<String, dynamic> json) {
+    final diseases = json['chronicDiseases'] as List?;
+    if (diseases != null && diseases.isNotEmpty) {
+      return diseases[0]['status'] ?? 'stable';
+    }
+    return 'stable';
+  }
+
+// في patient_page.dart — غير Patient.fromJson:
+factory Patient.fromJson(Map<String, dynamic> json) {
+  final user = json['userId'] ?? {};
   return Patient(
-    
-    id: json['_id'] ?? '',
-    userId: user['_id'] ?? '',
+    id: json['_id'] ?? '',        // patient profile _id
+    userId: user['_id'] ?? '',    // user _id (للـ chat)
     name: user['fullName'] ?? 'Unknown',
     age: user['DOB'] != null
         ? DateTime.now().year - DateTime.parse(user['DOB']).year
@@ -42,7 +41,8 @@ class Patient {
     medicationCount: (json['medications'] as List?)?.length ?? 0,
     status: _getStatus(json),
   );
-}}
+}
+}
 
 class PatientsPage extends StatefulWidget {
   const PatientsPage({super.key});
@@ -52,61 +52,52 @@ class PatientsPage extends StatefulWidget {
 }
 
 class _PatientsPageState extends State<PatientsPage> {
- List<Patient> allPatients = [];
-bool isLoading = true;
-Future<void> loadPatients() async {
-  try {
-    final response = await ApiService.getPatients();
+  List<Patient> allPatients = [];
+  bool isLoading = true;
+  String errorMessage = '';
 
-    print("RAW RESPONSE: $response");
-
-    final List data =
-       response['data'] ?? [];
-
-    setState(() {
-      allPatients = data
-          .map((e) => Patient.fromJson(e))
-          .toList();
-
-      isLoading = false;
-    });
-
-    print("LOADED: ${allPatients.length}");
-  } catch (e) {
-    print("ERROR LOAD: $e");
-    setState(() {
-      isLoading = false;
-    });
+  Future<void> loadPatients() async {
+    try {
+      setState(() {
+        isLoading = true;
+        errorMessage = '';
+      });
+      final response = await ApiService.getPatients();
+      final List data = response['data'] ?? [];
+      setState(() {
+        allPatients = data.map((e) => Patient.fromJson(e)).toList();
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        errorMessage = e.toString();
+        isLoading = false;
+      });
+    }
   }
-}
 
-@override
+  @override
   void initState() {
-  super.initState();
-  loadPatients();
-}
+    super.initState();
+    loadPatients();
+  }
 
   String searchQuery = '';
   String filter = 'all';
 
-List<Patient> get filteredPatients {
-  return allPatients.where((p) {
-    final matchesSearch =
-        p.name.toLowerCase().contains(searchQuery.toLowerCase());
-
-    final matchesFilter =
-        filter == 'all' || p.status == filter;
-
-    return matchesSearch && matchesFilter;
-  }).toList();
-}
+  List<Patient> get filteredPatients {
+    return allPatients.where((p) {
+      final matchesSearch =
+          p.name.toLowerCase().contains(searchQuery.toLowerCase());
+      final matchesFilter = filter == 'all' || p.status == filter;
+      return matchesSearch && matchesFilter;
+    }).toList();
+  }
 
   int get stableCount =>
       allPatients.where((e) => e.status == 'stable').length;
-
   int get monitoringCount =>
       allPatients.where((e) => e.status == 'monitoring').length;
-
   int get criticalCount =>
       allPatients.where((e) => e.status == 'critical').length;
 
@@ -145,19 +136,14 @@ List<Patient> get filteredPatients {
       case 'critical':
         return 'Critical';
       default:
-        return status;
+        return status[0].toUpperCase() + status.substring(1);
     }
   }
 
   Widget buildFilterChip(String label, String value) {
     final isActive = filter == value;
-
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          filter = value;
-        });
-      },
+      onTap: () => setState(() => filter = value),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
@@ -221,10 +207,7 @@ List<Patient> get filteredPatients {
             Text(
               value,
               style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
+                  color: color, fontWeight: FontWeight.bold, fontSize: 18),
             ),
             const SizedBox(height: 4),
             Text(
@@ -244,7 +227,6 @@ List<Patient> get filteredPatients {
 
   Widget buildPatientCard(Patient p) {
     final color = statusColor(p.status);
-
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
@@ -268,7 +250,7 @@ List<Patient> get filteredPatients {
                 radius: 26,
                 backgroundColor: AppColors.blueColor.withOpacity(.10),
                 child: Text(
-                  p.name.isNotEmpty ? p.name[0] : 'P',
+                  p.name.isNotEmpty ? p.name[0].toUpperCase() : 'P',
                   style: TextStyle(
                     color: AppColors.blueColor,
                     fontWeight: FontWeight.bold,
@@ -291,17 +273,16 @@ List<Patient> get filteredPatients {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      "Age ${p.age} • ${p.medicationCount} medications",
+                      'Age ${p.age} • ${p.medicationCount} medications',
                       style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 13,
-                      ),
+                          color: Colors.grey.shade600, fontSize: 13),
                     ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
                   color: statusBgColor(p.status),
                   borderRadius: BorderRadius.circular(30),
@@ -320,22 +301,10 @@ List<Patient> get filteredPatients {
           const SizedBox(height: 14),
           Row(
             children: [
-              // Expanded(
-              //   child: _miniInfoBox(
-              //     title: "Adherence",
-              //     value: "${p.adherence}%",
-              //     color: p.adherence >= 85
-              //         ? Colors.greenx
-              //         : p.adherence >= 70
-              //             ? Colors.orange
-              //             : Colors.red,
-              //     icon: Icons.show_chart_rounded,
-              //   ),
-              // ),
               const SizedBox(width: 10),
               Expanded(
                 child: _miniInfoBox(
-                  title: "Medications",
+                  title: 'Medications',
                   value: p.medicationCount.toString(),
                   color: AppColors.blueColor,
                   icon: Icons.medication_outlined,
@@ -351,17 +320,15 @@ List<Patient> get filteredPatients {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => PatientDetailsPage(patientId: p.userId,),
+                    builder: (context) =>
+                        PatientDetailsPage(patientId: p.userId),
                   ),
                 );
               },
               icon: const Icon(Icons.remove_red_eye_outlined, size: 18),
               label: const Text(
                 'View Patient Details',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.blueColor,
@@ -406,10 +373,9 @@ List<Patient> get filteredPatients {
                 Text(
                   value,
                   style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -422,7 +388,7 @@ List<Patient> get filteredPatients {
                 ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );
@@ -452,11 +418,7 @@ List<Patient> get filteredPatients {
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(vertical: 18),
             ),
-            onChanged: (value) {
-              setState(() {
-                searchQuery = value;
-              });
-            },
+            onChanged: (value) => setState(() => searchQuery = value),
           ),
         ),
         const SizedBox(height: 14),
@@ -480,21 +442,14 @@ List<Patient> get filteredPatients {
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-  return const Scaffold(
-    body: Center(child: CircularProgressIndicator()),
-  );
-}
     return Scaffold(
       backgroundColor: const Color(0xFFF7FAFC),
       body: SafeArea(
         child: Column(
           children: [
-            /// HEADER الثابت
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 39, 16, 0),
-              child:
-               Container(
+              child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
@@ -517,11 +472,8 @@ List<Patient> get filteredPatients {
                         color: Colors.white.withOpacity(.18),
                         borderRadius: BorderRadius.circular(18),
                       ),
-                      child: const Icon(
-                        Icons.groups_rounded,
-                        color: Colors.white,
-                        size: 28,
-                      ),
+                      child: const Icon(Icons.groups_rounded,
+                          color: Colors.white, size: 28),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -538,82 +490,131 @@ List<Patient> get filteredPatients {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            "${filteredPatients.length} patients available",
+                            isLoading
+                                ? 'Loading...'
+                                : '${filteredPatients.length} patients available',
                             style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                            ),
+                                color: Colors.white70, fontSize: 13),
                           ),
                         ],
                       ),
+                    ),
+                    // زر Refresh
+                    IconButton(
+                      onPressed: loadPatients,
+                      icon: const Icon(Icons.refresh, color: Colors.white),
                     ),
                   ],
                 ),
               ),
             ),
-
             const SizedBox(height: 10),
-
-            /// الجزء المتحرك فقط
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        buildStatCard(
-                          title: "Stable",
-                          value: stableCount.toString(),
-                          color: Colors.green,
-                          icon: Icons.favorite_outline,
-                        ),
-                        const SizedBox(width: 10),
-                        buildStatCard(
-                          title: "Monitoring",
-                          value: monitoringCount.toString(),
-                          color: Colors.orange,
-                          icon: Icons.visibility_outlined,
-                        ),
-                        const SizedBox(width: 10),
-                        buildStatCard(
-                          title: "Critical",
-                          value: criticalCount.toString(),
-                          color: Colors.red,
-                          icon: Icons.warning_amber_rounded,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    buildSearchAndFilters(),
-                    const SizedBox(height: 16),
-                    filteredPatients.isEmpty
-                        ? Padding(
-                            padding: const EdgeInsets.only(top: 40),
-                            child: Center(
-                              child: Text(
-                                "No patients found",
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : errorMessage.isNotEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.error_outline,
+                                  size: 60, color: Colors.red.shade300),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Failed to load patients',
                                 style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
+                                    fontSize: 16, color: Colors.grey.shade700),
+                              ),
+                              const SizedBox(height: 12),
+                              ElevatedButton.icon(
+                                onPressed: loadPatients,
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('Retry'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.blueColor,
+                                  foregroundColor: Colors.white,
                                 ),
                               ),
-                            ),
-                          )
-                        :  
-                        ListView.builder(
-                          itemCount: filteredPatients.length,
-  shrinkWrap: true,
-  physics: const BouncingScrollPhysics(),
-                           
-                            itemBuilder: (context, index) {
-                              return buildPatientCard(filteredPatients[index]);
-                            },
+                            ],
                           ),
-                  ],
-                ),
-              ),
+                        )
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  buildStatCard(
+                                    title: 'Stable',
+                                    value: stableCount.toString(),
+                                    color: Colors.green,
+                                    icon: Icons.favorite_outline,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  buildStatCard(
+                                    title: 'Monitoring',
+                                    value: monitoringCount.toString(),
+                                    color: Colors.orange,
+                                    icon: Icons.visibility_outlined,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  buildStatCard(
+                                    title: 'Critical',
+                                    value: criticalCount.toString(),
+                                    color: Colors.red,
+                                    icon: Icons.warning_amber_rounded,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              buildSearchAndFilters(),
+                              const SizedBox(height: 16),
+                              allPatients.isEmpty
+                                  ? Padding(
+                                      padding: const EdgeInsets.only(top: 60),
+                                      child: Column(
+                                        children: [
+                                          Icon(Icons.people_outline,
+                                              size: 70,
+                                              color: Colors.grey.shade400),
+                                          const SizedBox(height: 16),
+                                          Text(
+                                            'No patients yet',
+                                            style: TextStyle(
+                                              color: Colors.grey.shade600,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : filteredPatients.isEmpty
+                                      ? Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 40),
+                                          child: Center(
+                                            child: Text(
+                                              'No patients match your search',
+                                              style: TextStyle(
+                                                color: Colors.grey.shade600,
+                                                fontSize: 15,
+                                              ),
+                                            ),
+                                          ),
+                                        )
+                                      : ListView.builder(
+                                          shrinkWrap: true,
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
+                                          itemCount: filteredPatients.length,
+                                          itemBuilder: (context, index) =>
+                                              buildPatientCard(
+                                                  filteredPatients[index]),
+                                        ),
+                            ],
+                          ),
+                        ),
             ),
           ],
         ),

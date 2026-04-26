@@ -821,14 +821,16 @@ buildSoftCard(
         const SizedBox(height: 16),
 
         ...medications.map((e) => buildMedicationCard(
-              Medication(
-                name: e["name"] ?? "",
-                dosage: e["dosage"] ?? "",
-                frequency: e["frequency"] ?? "",
-                nextDose: e["nextDose"] ?? "",
-                taken: e["taken"] ?? false,
-                sideEffects: e["sideEffects"] ?? "",
-              ),
+             Medication(
+  name: e["medicationName"] ?? "",
+  dosage: e["dosage"] ?? "",
+  frequency: e["repeat"] ?? "",
+  nextDose: e["reminderTime"] ?? "",
+  taken: e["taken"] ?? false,
+  sideEffects: (e["sideEffects"] is List)
+      ? (e["sideEffects"] as List).join(", ")
+      : "",
+),
             )),
       ],
     ),
