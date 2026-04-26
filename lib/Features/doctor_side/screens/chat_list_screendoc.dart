@@ -1,7 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chat_details_screen.dart' hide AppColors;
+import 'package:flutter_application_2/Features/doctor_side/screens/patient_page.dart';
+import 'package:flutter_application_2/Features/patient_side/profile/view/profile_view.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/core/services/api_service.dart';
 
 class DoctorChat {
   final String name;
@@ -23,44 +26,7 @@ class DoctorChat {
   });
 }
 
-final List<DoctorChat> staticDoctors = [
-  DoctorChat(
-    name: "John Doe",
-    lastMessage: "Please take the medicine after meals",
-    time: "10:20 AM",
-    image: "lib/images/doc1(chat).jpg",
-    unreadCount: 1,
-    isOnline: true,
-    chatId: "chat_1",
-  ),
-  DoctorChat(
-    name: "Mary Smith",
-    lastMessage: "Your test results look normal",
-    time: "09:45 AM",
-    image: "lib/images/doc2(chat).jpg",
-    unreadCount: 0,
-    isOnline: true,
-    chatId: "chat_2",
-  ),
-  DoctorChat(
-    name: "Michael Lee",
-    lastMessage: "Don't forget your follow-up appointment",
-    time: "Yesterday",
-    image: "lib/images/doc3(chat).jpg",
-    unreadCount: 1,
-    isOnline: false,
-    chatId: "chat_3",
-  ),
-  DoctorChat(
-    name: "Olivia Wilson",
-    lastMessage: "I have updated your prescription",
-    time: "Mon",
-    image: "lib/images/doc4(chat).jpg",
-    unreadCount: 3,
-    isOnline: true,
-    chatId: "chat_4",
-  ),
-];
+ 
 
 class ChatsListScreenDoctor extends StatefulWidget {
   const ChatsListScreenDoctor({super.key});
@@ -72,17 +38,39 @@ class ChatsListScreenDoctor extends StatefulWidget {
 class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
   final TextEditingController _searchController = TextEditingController();
   String searchQuery = "";
+ List<Patient> allPatients = [];
+bool isLoading = true;
+Future<void> loadPatients() async {
+  try {
+    final response = await ApiService.getPatients();
 
-  List<DoctorChat> get filteredDoctors {
-    return staticDoctors.where((d) {
-      return d.name.toLowerCase().contains(searchQuery.toLowerCase()) ||
-          d.lastMessage.toLowerCase().contains(searchQuery.toLowerCase());
-    }).toList();
+    print("RAW RESPONSE: $response");
+
+    final List data =
+       response['data'] ?? [];
+
+    setState(() {
+      allPatients = data
+          .map((e) => Patient.fromJson(e))
+          .toList();
+
+      isLoading = false;
+    });
+
+    print("LOADED: ${allPatients.length}");
+  } catch (e) {
+    print("ERROR LOAD: $e");
+    setState(() {
+      isLoading = false;
+    });
   }
-
-  int get unreadChatsCount =>
-      staticDoctors.where((e) => e.unreadCount > 0).length;
-
+}
+int get unreadChatsCount => filteredPatients.length;
+@override
+  void initState() {
+  super.initState();
+  loadPatients();
+}
   @override
   void dispose() {
     _searchController.dispose();
@@ -147,7 +135,11 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
       ),
     );
   }
-
+List<Patient> get filteredPatients {
+  return allPatients.where((p) {
+    return p.name.toLowerCase().contains(searchQuery.toLowerCase());
+  }).toList();
+}
   Widget buildSearchBox() {
     return Container(
       decoration: BoxDecoration(
@@ -209,8 +201,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    filteredDoctors.isEmpty
-                        ? Center(
+filteredPatients.isEmpty                        ? Center(
                             child: Padding(
                               padding: const EdgeInsets.only(top: 40),
                               child: Text(
@@ -224,30 +215,27 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
                             ),
                           )
                         : ListView.builder(
-                            itemCount: filteredDoctors.length,
-                            shrinkWrap: true,
+itemCount: filteredPatients.length,                            shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             itemBuilder: (context, index) {
-                              final doctor = filteredDoctors[index];
-
-                              return ChatTile(
-                                name: doctor.name,
-                                lastMessage: doctor.lastMessage,
-                                time: doctor.time,
-                                image: doctor.image,
-                                unreadCount: doctor.unreadCount,
-                                isOnline: doctor.isOnline,
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => ChatsPageDoctor(
-                                        doctorName: doctor.name,
-                                        chatId: doctor.chatId,
-                                      ),
-                                    ),
-                                  );
-                                },
+final patient = filteredPatients[index];
+                             return ChatTile(
+  name: patient.name,
+  lastMessage: "Start chatting...", // placeholder
+  time: "",
+  image: "lib/images/default_avatar.png", // fallback image
+  unreadCount: 0,
+  isOnline: true,onTap: () {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ChatsPageDoctor(
+        doctorName: patient.name,
+        chatId:'69dfadf1d47fe26786e27151', // 🔥 use API id
+      ),
+    ),
+  );
+},
                               );
                             },
                           ),

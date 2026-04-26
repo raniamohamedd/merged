@@ -28,25 +28,17 @@ class Doctor {
   final user = json['userId'] ?? {};
 
   return Doctor(
-    id: (json['_id'] ?? '').toString(),
+        id: (user['id'] ?? '').toString(),
 
-    // ✅ الاسم الكامل من هنا
     name: (user['fullName'] ?? 'Unknown Doctor').toString(),
-
     specialty: (json['specialization'] ?? 'General').toString(),
-
     location: (json['clinicLocation'] ?? 'Unknown Location').toString(),
-
     experience: int.tryParse(
           (json['experienceYears'] ?? '0').toString(),
         ) ??
         0,
-
     rating: 0.0,
-
     available: true,
-
-    // ممكن تستخدمي isVerified هنا
     verified: json['isVerified'] ?? false,
   );
 }
@@ -129,6 +121,19 @@ class _DoctorSearchPageState extends State<DoctorSearchPage> {
   void sendRequest(String doctorId) {
     setState(() {
       requestedDoctors.add(doctorId);
+    });
+    // إرسال طلب الاتصال بالطبيب
+    ApiService.sendContactRequest(doctorId).then((response) {
+      // إذا تم الإرسال بنجاح
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('تم إرسال طلب الاتصال بنجاح!'),
+        backgroundColor: Colors.green,
+      ));
+    }).catchError((e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('فشل إرسال الطلب: $e'),
+        backgroundColor: Colors.red,
+      ));
     });
   }
 
@@ -355,6 +360,7 @@ class _DoctorSearchPageState extends State<DoctorSearchPage> {
                                                         ),
                                                       ),
                                                     ),
+                                                    
                                                     if (doctor.verified)
                                                       const Icon(
                                                         Icons.verified_user,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/Features/doctor_side/screens/chat_list_screendoc.dart' hide AppColors;
+import 'package:flutter_application_2/Features/doctor_side/screens/chat_list_screendoc.dart';
+import 'package:flutter_application_2/Features/doctor_side/screens/chat_list_screenpatient.dart' hide AppColors;
 import 'package:flutter_application_2/Features/doctor_side/screens/dashboard.dart';
 import 'package:flutter_application_2/Features/doctor_side/screens/emergency_doc.dart';
 import 'package:flutter_application_2/Features/doctor_side/screens/medication_report_page.dart';
@@ -9,7 +10,7 @@ import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:animated_bottom_navigation_bar/animated_bottom_navigation_bar.dart';
 
 class NavigationnScreendoc extends StatefulWidget {
-  NavigationnScreendoc({super.key});
+  const NavigationnScreendoc({super.key});
 
   static String id = '/navBottom';
 
@@ -53,8 +54,8 @@ class _NavigationScreenState extends State<NavigationnScreendoc> {
             pageIndex = gapIndex;
           });
         },
-        child: Icon(Icons.chat_bubble_outline_rounded, color: Colors.white),
         backgroundColor: AppColors.backgroundColorBlue,
+        child: Icon(Icons.chat_bubble_outline_rounded, color: Colors.white),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: AnimatedBottomNavigationBar(

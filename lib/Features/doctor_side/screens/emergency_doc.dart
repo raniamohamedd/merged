@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/doctor_side/screens/patient_detailsdoc.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/core/services/api_service.dart';
+import 'package:timeago/timeago.dart' as timeago;
 
 class EmergencyCase {
-  final int id;
-  final int patientId;
+  final String id;
+  final String patientId;
   final String patientName;
   final String time;
   final String alertType;
-  final String status; // active or resolved
-  final String severity; // high, medium, low
+  final String status;
+  final String severity;
   final String details;
 
   EmergencyCase({
@@ -22,8 +24,30 @@ class EmergencyCase {
     required this.severity,
     required this.details,
   });
-}
 
+  factory EmergencyCase.fromJson(Map<String, dynamic> json) {
+    return EmergencyCase(
+      id: json['_id'],
+      patientId: json['patientId']['_id'],
+      patientName: json['patientId']['fullName'] ?? "Unknown",
+
+      time: timeago.format(
+        DateTime.parse(json['createdAt']),
+        locale: 'en_short',
+      ),
+
+      // 🔥 IMPORTANT: match backend enum
+      alertType: json['updateType'] ?? "other",
+
+      status: json['isResolved'] ? 'resolved' : 'active',
+
+      // temporary until backend sends severity
+      severity: 'high',
+
+      details: json['details'] ?? "",
+    );
+  }
+}
 class EmergencyCasesPage extends StatefulWidget {
   const EmergencyCasesPage({super.key});
 
@@ -32,53 +56,31 @@ class EmergencyCasesPage extends StatefulWidget {
 }
 
 class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
-  final List<EmergencyCase> emergencyCases = [
-    EmergencyCase(
-      id: 1,
-      patientId: 5,
-      patientName: 'James Wilson',
-      time: '10:30 AM',
-      alertType: 'Critical Blood Pressure',
-      status: 'active',
-      severity: 'high',
-      details:
-          'Blood pressure reading: 180/110. Patient reports severe headache and dizziness. Immediate attention required.',
-    ),
-    EmergencyCase(
-      id: 2,
-      patientId: 2,
-      patientName: 'Mary Smith',
-      time: '09:15 AM',
-      alertType: 'Multiple Missed Doses',
-      status: 'active',
-      severity: 'medium',
-      details:
-          'Patient has missed 3 consecutive doses of Warfarin. Last taken dose was 36 hours ago.',
-    ),
-    EmergencyCase(
-      id: 3,
-      patientId: 7,
-      patientName: 'Michael Brown',
-      time: '08:45 AM',
-      alertType: 'Severe Side Effect',
-      status: 'active',
-      severity: 'high',
-      details:
-          'Patient reports severe allergic reaction to new antibiotic. Symptoms include rash and difficulty breathing.',
-    ),
-    EmergencyCase(
-      id: 4,
-      patientId: 1,
-      patientName: 'John Doe',
-      time: 'Yesterday 3:45 PM',
-      alertType: 'High Blood Pressure',
-      status: 'resolved',
-      severity: 'medium',
-      details:
-          'Blood pressure reading: 165/98. Patient took additional medication as prescribed. Follow-up reading normal.',
-    ),
+   List<EmergencyCase> emergencyCases = [
   ];
+  
+  Future<void> loadSos() async {
+  try {
+    final data = await ApiService.getSos();
 
+    setState(() {
+      emergencyCases =
+          data.map((e) => EmergencyCase.fromJson(e)).toList();
+      isLoading = false;
+    });
+  } catch (e) {
+    print("ERROR: $e");
+    setState(() {
+      isLoading = false;
+    });
+  }
+}
+@override
+void initState() {
+  super.initState();
+  loadSos();
+}
+bool isLoading =true;
   int get activeCount =>
       emergencyCases.where((e) => e.status == 'active').length;
 
@@ -243,7 +245,7 @@ class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      ec.time,
+                      '${ec.time} ago',
                       style: TextStyle(
                         color: Colors.grey.shade600,
                         fontSize: 13,
@@ -487,7 +489,11 @@ class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 700;
-
+if (isLoading) {
+  return const Scaffold(
+    body: Center(child: CircularProgressIndicator()),
+  );
+}
     return Scaffold(
       backgroundColor: const Color(0xFFF7FAFC),
       body: SafeArea(
@@ -609,6 +615,7 @@ class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
 
 class EmergencyCaseDialog extends StatelessWidget {
   final EmergencyCase emergencyCase;
+
 
   const EmergencyCaseDialog({
     super.key,
@@ -775,7 +782,8 @@ class EmergencyCaseDialog extends StatelessWidget {
 
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton.icon(
+                child: 
+                ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.blueColor,
                     foregroundColor: Colors.white,
@@ -790,8 +798,9 @@ class EmergencyCaseDialog extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => PatientDetailsPage(),
-                      ),
+builder: (_) => PatientDetailsPage(
+  patientId: emergencyCase.patientId,
+),                      ),
                     );
                   },
                   icon: const Icon(Icons.person_outline),

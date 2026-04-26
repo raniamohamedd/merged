@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chat_details_screen.dart' hide AppColors;
 import 'package:flutter_application_2/Features/patient_side/chats/view/chat_details_screen.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/core/services/api_service.dart';
 
 class Medication {
   final String name, dosage, frequency, nextDose, sideEffects;
@@ -58,84 +59,50 @@ class Patient {
   });
 }
 
-class PatientDetailsPage extends StatelessWidget {
-  PatientDetailsPage({super.key});
+class PatientDetailsPage extends StatefulWidget {
+  final String patientId;
 
-  final Patient patient = Patient(
-    name: 'John Doe',
-    age: 45,
-    conditions: ['Hypertension', 'Type 2 Diabetes'],
-    status: 'stable',
-    medications: [
-      Medication(
-        name: 'Metformin',
-        dosage: '500mg',
-        frequency: 'Twice daily',
-        nextDose: '2:00 PM',
-        taken: true,
-        sideEffects: 'None',
-      ),
-      Medication(
-        name: 'Lisinopril',
-        dosage: '10mg',
-        frequency: 'Once daily',
-        nextDose: '8:00 AM',
-        taken: true,
-        sideEffects: 'None',
-      ),
-      Medication(
-        name: 'Atorvastatin',
-        dosage: '20mg',
-        frequency: 'Once daily',
-        nextDose: '8:00 PM',
-        taken: false,
-        sideEffects: 'Mild headache',
-      ),
-      Medication(
-        name: 'Aspirin',
-        dosage: '81mg',
-        frequency: 'Once daily',
-        nextDose: '8:00 AM',
-        taken: true,
-        sideEffects: 'None',
-      ),
-    ],
-    symptoms: [
-      Symptom(
-        date: '2025-11-14',
-        description: 'Mild headache after evening medication',
-        severity: 'low',
-      ),
-      Symptom(
-        date: '2025-11-12',
-        description: 'Slight dizziness in the morning',
-        severity: 'low',
-      ),
-      Symptom(
-        date: '2025-11-10',
-        description: 'No symptoms reported',
-        severity: 'none',
-      ),
-      Symptom(
-        date: '2025-11-08',
-        description: 'Feeling fatigued',
-        severity: 'medium',
-      ),
-    ],
-    emergencyHistory: [
-      Emergency(
-        date: '2025-11-13 3:45 PM',
-        reason: 'High blood pressure reading (165/98)',
-        resolved: true,
-      ),
-      Emergency(
-        date: '2025-11-01 10:20 AM',
-        reason: 'Missed multiple medications',
-        resolved: true,
-      ),
-    ],
-  );
+  const PatientDetailsPage({super.key, required this.patientId});
 
+  @override
+  State<PatientDetailsPage> createState() => _PatientDetailsPageState();
+}
+
+class _PatientDetailsPageState extends State<PatientDetailsPage> {
+  Map<String, dynamic>? patientData;
+
+  @override
+  void initState() {
+    super.initState();
+    loadPatient();
+  }
+
+  Future<void> loadPatient() async {
+    try {
+      final response =
+          await ApiService.getPatientById(widget.patientId);
+
+      setState(() {
+        patientData = response["data"];
+      });
+    } catch (e) {
+      print(e);
+    }
+  }
+
+int calculateAge(String dob) {
+  final birthDate = DateTime.parse(dob);
+  final today = DateTime.now();
+
+  int age = today.year - birthDate.year;
+
+  if (today.month < birthDate.month ||
+      (today.month == birthDate.month && today.day < birthDate.day)) {
+    age--;
+  }
+
+  return age;
+}
   Color statusColor(String status) {
     switch (status.toLowerCase()) {
       case 'stable':
@@ -560,7 +527,39 @@ class PatientDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final patientStatusColor = statusColor(patient.status);
+    if (patientData == null) {
+  return const Scaffold(
+    body: Center(child: CircularProgressIndicator()),
+  );
+}if (patientData == null || patientData!["userId"] == null) {
+  return const Scaffold(
+    body: Center(child: Text("Patient data not found")),
+  );
+}
+     final medications = (patientData?["medications"] as List?) ?? [];
+final symptoms = (patientData?["symptoms"] as List?) ?? [];
+final emergencies = (patientData?["emergencyHistory"] as List?) ?? [];
+final diseases = (patientData?["chronicDiseases"] as List?) ?? [];
+final user = patientData?["userId"];
+final phone = user?["phone"] ?? "";
+final gender = user?["gender"] ?? "";
+final bloodType = patientData?["bloodType"] ?? "";
+final height = patientData?["height"]?.toString() ?? "";
+final weight = patientData?["weight"]?.toString() ?? "";
+final allergies = patientData?["allergies"] ?? "";
+final name = user?["fullName"] ?? "Unknown";
+
+final dob = user?["DOB"];
+final age = (dob != null && dob.toString().isNotEmpty)
+    ? calculateAge(dob)
+    : 0;
+final status = diseases.isNotEmpty
+    ? diseases[0]["status"] ?? "stable"
+    : "stable";
+
+final conditions =
+    diseases.map<String>((e) => e["name"].toString()).toList();
+    final patientStatusColor = statusColor(status);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7FAFC),
@@ -614,7 +613,7 @@ class PatientDetailsPage extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            patient.name,
+                            name,
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -635,7 +634,7 @@ class PatientDetailsPage extends StatelessWidget {
                  InkWell(
                   
                    child: 
-                   Container(
+                   SizedBox(
                         width: 56,
                         height: 56,
                         // decoration: BoxDecoration(
@@ -681,6 +680,75 @@ class PatientDetailsPage extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                 child: Column(
                   children: [
+                    const SizedBox(height: 16),
+
+buildSoftCard(
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      sectionTitle("Personal Info", Icons.person_outline),
+      const SizedBox(height: 16),
+
+      Row(
+        children: [
+          infoMiniCard(
+            title: "Phone",
+            value: phone,
+            icon: Icons.phone_outlined,
+            color: Colors.green,
+          ),
+          const SizedBox(width: 10),
+          infoMiniCard(
+            title: "Gender",
+            value: gender,
+            icon: Icons.person_outline,
+            color: Colors.purple,
+          ),
+        ],
+      ),
+
+      const SizedBox(height: 10),
+
+      Row(
+        children: [
+          infoMiniCard(
+            title: "Blood",
+            value: bloodType,
+            icon: Icons.bloodtype_outlined,
+            color: Colors.red,
+          ),
+          const SizedBox(width: 10),
+          infoMiniCard(
+            title: "Height",
+            value: "$height cm",
+            icon: Icons.height,
+            color: Colors.blue,
+          ),
+        ],
+      ),
+
+      const SizedBox(height: 10),
+
+      Row(
+        children: [
+          infoMiniCard(
+            title: "Weight",
+            value: "$weight kg",
+            icon: Icons.monitor_weight_outlined,
+            color: Colors.orange,
+          ),
+          const SizedBox(width: 10),
+          infoMiniCard(
+            title: "Allergies",
+            value: allergies,
+            icon: Icons.warning_amber_outlined,
+            color: Colors.redAccent,
+          ),
+        ],
+      ),
+    ],
+  ),
+),
                     buildSoftCard(
                       child: Column(
                         children: [
@@ -688,22 +756,22 @@ class PatientDetailsPage extends StatelessWidget {
                             children: [
                               infoMiniCard(
                                 title: "Age",
-                                value: "${patient.age}",
+                                value: "$age",
                                 icon: Icons.cake_outlined,
                                 color: AppColors.blueColor,
                               ),
                               const SizedBox(width: 10),
                               infoMiniCard(
                                 title: "Conditions",
-                                value: "${patient.conditions.length}",
+                                value: "${conditions.length}",
                                 icon: Icons.local_hospital_outlined,
                                 color: Colors.orange,
                               ),
                               const SizedBox(width: 10),
                               infoMiniCard(
                                 title: "Status",
-                                value: patient.status[0].toUpperCase() +
-                                    patient.status.substring(1),
+                                value: status[0].toUpperCase() +
+                                    status.substring(1),
                                 icon: Icons.favorite_outline,
                                 color: patientStatusColor,
                               ),
@@ -715,7 +783,7 @@ class PatientDetailsPage extends StatelessWidget {
                             child: Wrap(
                               spacing: 8,
                               runSpacing: 8,
-                              children: patient.conditions.map((condition) {
+                              children: conditions.map((condition) {
                                 return Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 12,
@@ -742,52 +810,67 @@ class PatientDetailsPage extends StatelessWidget {
                     ),
 
                     const SizedBox(height: 16),
+                   
+          
 
-                    buildSoftCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          sectionTitle(
-                            "Medication Schedule",
-                            Icons.medication_outlined,
-                          ),
-                          const SizedBox(height: 16),
-                          ...patient.medications.map(buildMedicationCard),
-                        ],
-                      ),
-                    ),
+             if (medications.isNotEmpty)
+  buildSoftCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        sectionTitle("Medication Schedule", Icons.medication_outlined),
+        const SizedBox(height: 16),
 
+        ...medications.map((e) => buildMedicationCard(
+              Medication(
+                name: e["name"] ?? "",
+                dosage: e["dosage"] ?? "",
+                frequency: e["frequency"] ?? "",
+                nextDose: e["nextDose"] ?? "",
+                taken: e["taken"] ?? false,
+                sideEffects: e["sideEffects"] ?? "",
+              ),
+            )),
+      ],
+    ),
+  ),
+                    const SizedBox(height: 16),
+if (symptoms.isNotEmpty)
+  buildSoftCard(
+    child: Column(
+      children: [
+        sectionTitle("Symptoms Log", Icons.monitor_heart_outlined),
+        const SizedBox(height: 16),
+
+        ...symptoms.map((e) => buildSymptomCard(
+              Symptom(
+                date: e["date"] ?? "",
+                description: e["description"] ?? "",
+                severity: e["severity"] ?? "low",
+              ),
+            )),
+      ],
+    ),
+  ),
                     const SizedBox(height: 16),
 
-                    buildSoftCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          sectionTitle(
-                            "Symptoms Log",
-                            Icons.monitor_heart_outlined,
-                          ),
-                          const SizedBox(height: 16),
-                          ...patient.symptoms.map(buildSymptomCard),
-                        ],
-                      ),
-                    ),
+    if (emergencies.isNotEmpty)
+  buildSoftCard(
+    child: Column(
+      children: [
+        sectionTitle("Emergency History", Icons.warning_amber_rounded),
+        const SizedBox(height: 16),
 
-                    const SizedBox(height: 16),
-
-                    buildSoftCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          sectionTitle(
-                            "Emergency History",
-                            Icons.warning_amber_rounded,
-                          ),
-                          const SizedBox(height: 16),
-                          ...patient.emergencyHistory.map(buildEmergencyCard),
-                        ],
-                      ),
-                    ),
+        ...emergencies.map((e) => buildEmergencyCard(
+              Emergency(
+                date: e["date"] ?? "",
+                reason: e["reason"] ?? "",
+                resolved: e["resolved"] ?? false,
+              ),
+            )),
+      ],
+    ),
+  ),
                   ],
                 ),
               ),

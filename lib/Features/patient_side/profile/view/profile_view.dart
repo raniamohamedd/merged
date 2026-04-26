@@ -16,10 +16,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 class DoctorContact {
   final String name;
+    final String id;
+
   final String specialty;
   final String phone;
 
   DoctorContact({
+    required this.id,
     required this.name,
     required this.specialty,
     required this.phone,
@@ -44,24 +47,26 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
   bool isEditing = false;
   String? profileImageUrl;
   File? _selectedImageFile;
+Future<void> loadDoctors() async {
+  try {
+    final data = await ApiService.getmydoctors(); // بيرجع list
 
-  final List<DoctorContact> doctors = [
-    DoctorContact(
-      name: "Dr. Sarah Mitchell",
-      specialty: "Cardiologist",
-      phone: "01012345678",
-    ),
-    DoctorContact(
-      name: "Dr. Ahmed Ali",
-      specialty: "Dermatologist",
-      phone: "01123456789",
-    ),
-    DoctorContact(
-      name: "Dr. Mona Hassan",
-      specialty: "Neurologist",
-      phone: "01234567890",
-    ),
-  ];
+    setState(() {
+      doctors = data.map<DoctorContact>((doc) {
+        return DoctorContact(
+         id: doc['_id'] ?? '',
+          name: doc['userId']?['fullName'] ?? 'Unknown',
+          specialty: doc['specialization'] ?? 'Doctor',
+          phone: doc['userId']?['phone'] ?? '',
+        );
+      }).toList();
+    });
+
+  } catch (e) {
+    debugPrint("Doctors error: $e");
+  }
+}
+   List<DoctorContact> doctors = [];
 
   Map<String, String> profileData = {
     "fullName": "",
@@ -80,34 +85,65 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
     "notes": "",
   };
 
-  @override
-  void initState() {
-    super.initState();
-    profileData["email"] = widget.userEmail;
-    loadProfile();
+@override
+void initState() {
+  super.initState();
+  profileData["email"] = widget.userEmail;
+  loadProfile();
+  loadDoctors(); // 🔥 دي أهم سطر
+
+}
+  // @override
+  // void initState() {
+  //   super.initState();
+  //   profileData["email"] = widget.userEmail;
+  //   loadProfile();
+  // }
+Future<void> loadProfile() async {
+  try {
+    final response = await ApiService.getPatientProfile();
+    final data = response["data"];
+
+    final user = data["userId"];
+
+    setState(() {
+      profileData["fullName"] = user["fullName"] ?? "";
+      profileData["email"] = user["email"] ?? "";
+      profileData["phone"] = user["phone"] ?? "";
+      profileData["gender"] = user["gender"] ?? "";
+      profileData["dateOfBirth"] =
+          user["DOB"] != null ? user["DOB"].toString().split("T")[0] : "";
+
+      profileData["bloodType"] = data["bloodType"] ?? "";
+      profileData["height"] = data["height"]?.toString() ?? "";
+      profileData["weight"] = data["weight"]?.toString() ?? "";
+      profileData["allergies"] = data["allergies"] ?? "";
+      profileData["notes"] = data["note"] ?? "";
+
+      // ✅ chronic disease
+      if (data["chronicDiseases"] != null &&
+          data["chronicDiseases"].isNotEmpty) {
+        profileData["chronicConditions"] =
+    (data["chronicDiseases"] as List)
+        .map((e) => e["name"])
+        .join(", ");
+      }
+
+      // ✅ image (لو موجودة بعدين)
+      if (user["image"] != null) {
+        profileImageUrl = user["image"]["secure_url"];
+      }
+    });
+
+    // // لو بتستخدمي controllers
+    // controllers.forEach((key, controller) {
+    //   controller.text = profileData[key] ?? "";
+    // });
+
+  } catch (e) {
+    debugPrint("Profile error: $e");
   }
-
-  Future<void> loadProfile() async {
-    try {
-      final response = await ApiService.getProfile();
-      final user = response["data"]["user"];
-
-      setState(() {
-        profileData["phone"] = user["phone"] ?? "";
-        profileData["fullName"] =
-            "${user["firstName"] ?? ""} ${user["lastName"] ?? ""}".trim();
-        profileData["email"] = user["email"] ?? "";
-        profileData["gender"] = user["gender"] ?? "";
-        profileData["dateOfBirth"] =
-            user["DOB"] != null ? user["DOB"].toString().split("T")[0] : "";
-        profileImageUrl =
-            user["image"] != null ? user["image"]["secure_url"] : null;
-      });
-    } catch (e) {
-      debugPrint("Profile error: $e");
-    }
-  }
-
+}
   Future<void> pickAndUploadImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
@@ -165,62 +201,48 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
       _showTopMessage("Failed to upload image");
     }
   }
+Future<void> handleSave() async {
+  setState(() {
+    isEditing = false;
+  });
 
-  Future<void> handleSave() async {
-    setState(() {
-      isEditing = false;
-    });
+  try {
+    // تجهيز chronicDiseases من التكست
+    List<Map<String, dynamic>> chronicList = [];
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString("accessToken");
-
-      if (token == null || token.isEmpty) {
-        _showTopMessage("User not logged in");
-        return;
-      }
-
-      final payload = {
-        "email": profileData["email"],
-        "bloodType": profileData["bloodType"],
-        "height": profileData["height"]!.isNotEmpty
-            ? int.tryParse(profileData["height"]!)
-            : null,
-        "weight": profileData["weight"]!.isNotEmpty
-            ? int.tryParse(profileData["weight"]!)
-            : null,
-        "allergies": profileData["allergies"],
-        "note": profileData["notes"],
-        "chronicDiseases": [],
-      };
-
-      final response = await http.patch(
-        Uri.parse(
-          "https://medpal-production-e325.up.railway.app/patient/profile",
-        ),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
-        },
-        body: jsonEncode(payload),
-      );
-
-      if (response.statusCode == 200) {
-        _showTopMessage("Profile saved successfully");
-      } else {
-        _showTopMessage("Failed to save profile");
-      }
-
-      if (_selectedImageFile != null) {
-        await pickAndUploadImage();
-      }
-    } catch (e) {
-      debugPrint("Error saving profile: $e");
-      _showTopMessage("Error saving profile");
+    if (profileData["chronicConditions"]!.isNotEmpty) {
+      chronicList.add({
+        "name": profileData["chronicConditions"],
+        "diagnosisDate": DateTime.now().toIso8601String().split("T")[0],
+        "medications": [],
+        "status": "unknown",
+        "notes": profileData["notes"] ?? "",
+      });
     }
-  }
 
-  String getInitials(String name) {
+    await ApiService.completeSignup(
+      chronicDiseases: chronicList,
+      allergies: profileData["allergies"] ?? "",
+      bloodType: profileData["bloodType"] ?? "",
+      height: profileData["height"]!.isNotEmpty
+          ? int.parse(profileData["height"]!)
+          : 0,
+      weight: profileData["weight"]!.isNotEmpty
+          ? int.parse(profileData["weight"]!)
+          : 0,
+      note: profileData["notes"] ?? "",
+    );
+
+    _showTopMessage("Profile completed successfully ✅");
+
+    if (_selectedImageFile != null) {
+      await pickAndUploadImage();
+    }
+  } catch (e) {
+    debugPrint("Error: $e");
+    _showTopMessage("Error saving profile ❌");
+  }
+} String getInitials(String name) {
     return name
         .split(" ")
         .where((e) => e.isNotEmpty)
@@ -560,14 +582,15 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
               ),
               child: Row(
                 children: [
-                  IconButton(
-                    onPressed: widget.onBack,
-                    icon: const Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: Colors.white,
-                    ),
-                  ),
+                  // IconButton(
+                  //   onPressed: widget.onBack,
+                  //   icon: const Icon(
+                  //     Icons.arrow_back_ios_new_rounded,
+                  //     color: Colors.white,
+                  //   ),
+                  // ),
                   const Spacer(),
+                  SizedBox(width: 66,),
                   const Text(
                     "My Profile",
                     style: TextStyle(

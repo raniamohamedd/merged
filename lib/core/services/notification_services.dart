@@ -17,8 +17,8 @@ class NotificationService {
   }) async {
     navigatorKey = navKey;
 
-    tz_data.initializeTimeZones();
-
+tz_data.initializeTimeZones();
+tz.setLocalLocation(tz.getLocation('Africa/Cairo'));
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -58,36 +58,37 @@ class NotificationService {
     await androidPlugin?.requestNotificationsPermission();
     await androidPlugin?.requestExactAlarmsPermission();
   }
-
-  static Future<void> showScheduledNotification({
-    required int id,
-    required String title,
-    required String body,
-    required tz.TZDateTime scheduledTime,
-    String? payload,
-  }) async {
-    await _notifications.zonedSchedule(
-      id,
-      title,
-      body,
-      scheduledTime,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'med_channel',
-          'Medication Reminders',
-          channelDescription: 'Medication reminder notifications',
-          importance: Importance.max,
-          priority: Priority.high,
-        ),
+static Future<void> showScheduledNotification({
+  required int id,
+  required String title,
+  required String body,
+  required tz.TZDateTime scheduledTime,
+  String? payload,
+}) async {
+  await _notifications.zonedSchedule(
+    id,
+    title,
+    body,
+    scheduledTime,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'med_channel',
+        'Medication Reminders',
+        channelDescription: 'Medication reminder notifications',
+        importance: Importance.max,
+        priority: Priority.high,
       ),
-      payload: payload,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
-    );
-  }
+    ),
+    payload: payload,
+    uiLocalNotificationDateInterpretation:
+        UILocalNotificationDateInterpretation.absoluteTime,
 
+    androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+
+    // 🔥 مهم جدًا عشان الإشعار يشتغل في نفس الوقت كل يوم لو تكرر
+    matchDateTimeComponents: DateTimeComponents.time,
+  );
+}
   static Future<void> showWeeklyScheduledNotification({
     required int id,
     required String title,

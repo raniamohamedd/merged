@@ -51,7 +51,7 @@ class _CustomGenderDropdownState extends State<CustomGenderDropdown> {
                 dropdownColor: AppColors.whiteColor.withOpacity(0.9),
 
                 hint: Text(
-                  "  ${selectedGender}",
+                  "  $selectedGender",
                   style: TextStyle(color: AppColors.greyColor),
                 ),
                 // value: selectedGender,

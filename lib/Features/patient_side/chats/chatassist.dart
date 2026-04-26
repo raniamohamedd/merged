@@ -262,15 +262,15 @@ void _addInitialBotMessage() {
                 
                 
                 IconButton(
-                        icon: Container(width: 33,height: 33,
+                        icon: Container(width: 33,height: 33,decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: BoxBorder.all(color: Colors.grey)),
               
               child:
                          const Icon(Icons.arrow_back, size: 18,
                          color: Colors.black
                          )
-                         ,decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: BoxBorder.all(color: Colors.grey)),),
+                         ,),
                         onPressed: () => Navigator.pop(context),
                       ),
                       Text(

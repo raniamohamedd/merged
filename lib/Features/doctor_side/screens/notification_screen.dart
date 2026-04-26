@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chat_details_screen.dart' hide AppColors;
 import 'package:flutter_application_2/Features/doctor_side/screens/patient_detailsdoc.dart';
+import 'package:flutter_application_2/core/services/api_service.dart';
 
 class DoctorNotificationItem {
+  
   final String title;
   final String subtitle;
   final String time;
@@ -53,64 +55,30 @@ class NotificationsPageDoctor extends StatefulWidget {
 
 class _NotificationsPageDoctorState extends State<NotificationsPageDoctor> {
   String selectedFilter = "all";
-
+@override
+void initState() {
+  super.initState();
+  loadRequests();
+}
   late List<DoctorNotificationItem> notifications = [
-    DoctorNotificationItem(
-      title: "New Connection Request",
-      subtitle: "John Doe sent you a connection request.",
-      time: "2 min ago",
-      type: "request",
-      isUnread: true,
-      patientName: "John Doe",
-      chatId: "chat_john",
-    ),
-    DoctorNotificationItem(
-      title: "Emergency Alert",
-      subtitle: "Mary Smith triggered an emergency call. Immediate attention required.",
-      time: "5 min ago",
-      type: "emergency",
-      isUnread: true,
-      patientName: "Mary Smith",
-      chatId: "chat_mary",
-    ),
-    DoctorNotificationItem(
-      title: "New Message",
-      subtitle: "Lisa Martin sent you a new message.",
-      time: "10 min ago",
-      type: "message",
-      isUnread: true,
-      patientName: "Lisa Martin",
-      chatId: "chat_lisa",
-    ),
-    DoctorNotificationItem(
-      title: "Missed Medication",
-      subtitle: "Robert King missed 2 scheduled doses today.",
-      time: "25 min ago",
-      type: "medication",
-      isUnread: false,
-      patientName: "Robert King",
-      chatId: "chat_robert",
-    ),
-    DoctorNotificationItem(
-      title: "Symptom Report",
-      subtitle: "Emma Roberts reported a new symptom: dizziness.",
-      time: "1 hour ago",
-      type: "symptom",
-      isUnread: false,
-      patientName: "Emma Roberts",
-      chatId: "chat_emma",
-    ),
-    DoctorNotificationItem(
-      title: "Emergency Resolved",
-      subtitle: "James Wilson emergency case has been marked as resolved.",
-      time: "2 hours ago",
-      type: "success",
-      isUnread: false,
-      patientName: "James Wilson",
-      chatId: "chat_james",
-    ),
   ];
+  bool isloading=true;
+Future<void> loadRequests() async {
+  try {
+    final data = await ApiService.getDoctorRequests();
+    print(data);
 
+    setState(() {
+      notifications = data;
+      isloading = false;
+    });
+  } catch (e) {
+    setState(() {
+      isloading = false;
+    });
+    print(e);
+  }
+}
   List<DoctorNotificationItem> get filteredNotifications {
     if (selectedFilter == "all") return notifications;
     if (selectedFilter == "unread") {
@@ -184,7 +152,7 @@ class _NotificationsPageDoctorState extends State<NotificationsPageDoctor> {
     if (item.type == "request") {
       showRequestActionSheet(item);
       return;
-    }
+    } 
 
     markOneAsRead(item);
 
@@ -205,7 +173,7 @@ class _NotificationsPageDoctorState extends State<NotificationsPageDoctor> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => PatientDetailsPage(),
+          builder: (_) => PatientDetailsPage(patientId: '',),
         ),
       );
       return;
@@ -237,12 +205,51 @@ class _NotificationsPageDoctorState extends State<NotificationsPageDoctor> {
               CircleAvatar(
                 radius: 28,
                 backgroundColor: AppColors.blueColor.withOpacity(.10),
-                child: Icon(
+                child:
+                
+
+         
+                IconButton(       
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PatientDetailsPage(patientId: item.chatId,),
+                      ),
+                    );
+                  }, icon:  Icon(
                   Icons.person_add_alt_1_rounded,
                   color: AppColors.blueColor,
                   size: 28,
-                ),
+                ),)
+                
+                
               ),
+                            const SizedBox(height: 8),
+
+           ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.blueColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14,horizontal: 20),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PatientDetailsPage(patientId: item.chatId,),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.person_outline),
+                  label: const Text("View Patient Details"),
+                ),
               const SizedBox(height: 14),
               Text(
                 item.title,
@@ -274,28 +281,29 @@ class _NotificationsPageDoctorState extends State<NotificationsPageDoctor> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        markOneAsRead(item);
-                        removeNotification(item);
+                      onPressed: 
+                   () async {
+  await ApiService.rejectRequest(item.chatId);
 
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              "Connection request from ${item.patientName} declined",
-                            ),
-                            backgroundColor: Colors.red,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                        );
-                      },
-                      child: const Text(
-                        "Decline",
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
+  Navigator.pop(context);
+
+  setState(() {
+    notifications.remove(item);
+  });
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        "Connection request from ${item.patientName} declined",
+      ),
+      backgroundColor: Colors.red,
+    ),
+  );
+},
+child: const Text(
+  "Decline",
+  style: TextStyle(fontWeight: FontWeight.w600),
+),   
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -310,28 +318,28 @@ class _NotificationsPageDoctorState extends State<NotificationsPageDoctor> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        markOneAsRead(item);
-                        removeNotification(item);
+                     onPressed: () async {
+  await ApiService.acceptRequest(item.chatId);
 
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              "Connection request from ${item.patientName} accepted",
-                            ),
-                            backgroundColor: AppColors.blueColor,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                        );
-                      },
-                      child: const Text(
-                        "Accept",
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
+  Navigator.pop(context);
+
+  setState(() {
+    notifications.remove(item);
+  });
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        "Connection request from ${item.patientName} accepted",
+      ),
+      backgroundColor: AppColors.blueColor,
+    ),
+  );
+},
+child: const Text(
+  "Accept",
+  style: TextStyle(fontWeight: FontWeight.w600),
+),
                     ),
                   ),
                 ],

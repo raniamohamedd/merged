@@ -96,8 +96,8 @@ Future<UserModel> getUser(String userId) async {
   // }
 
   Future<void> updateUserField(String field, dynamic newValue) async {
-    final user_id = UserSession.currentUser!.user_id;
-    await _firestore.collection('users').doc(user_id).update({field: newValue});
+    final userId = UserSession.currentUser!.user_id;
+    await _firestore.collection('users').doc(userId).update({field: newValue});
   }
 
   //////////add your services here

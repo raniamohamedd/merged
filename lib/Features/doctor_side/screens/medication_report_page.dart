@@ -601,7 +601,7 @@ pw.Widget _pdfSummaryItem(String title, String value, PdfColor color) {
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: DropdownButtonFormField<T>(
-        value: value,
+        initialValue: value,
         decoration: InputDecoration(
           labelText: label,
           labelStyle: const TextStyle(color: Color(0xFF6B7280)),

@@ -43,7 +43,7 @@ class _ChatsPagePatientState extends State<ChatsPagePatient> {
     FirebaseFirestore.instance
         .collection('chats')
         .doc(widget.chatId)
-        .update({'unreadCount_${currentUserId}': 0})
+        .update({'unreadCount_$currentUserId': 0})
         .catchError((_) {});
   }
   void _scrollToBottom() {
@@ -601,10 +601,11 @@ class _ChatInputState extends State<ChatInput>
                   if (_hasText) {
                     sendMessage();
                   } else {
-                    if (_isRecording)
+                    if (_isRecording) {
                       await _stopRecording();
-                    else
+                    } else {
                       await _startRecording();
+                    }
                   }
                 },
               ),

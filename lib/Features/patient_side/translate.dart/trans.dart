@@ -12,7 +12,7 @@ class Trans extends StatefulWidget {
 
 class _TransState extends State<Trans> {
     final PageController _controller = PageController();
-  int _currentPage = 0;
+  final int _currentPage = 0;
   bool hasPressedNext = false;
   bool isArabic = false;
   late List<Map<String, dynamic>> _pages;

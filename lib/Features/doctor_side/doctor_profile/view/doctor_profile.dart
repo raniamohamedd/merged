@@ -22,6 +22,7 @@ class _DoctorProfileState extends State<DoctorProfile> {
     super.initState();
   }
 
+  @override
   Widget build(BuildContext context) {
     AuthService authService = AuthService();
     return Scaffold(

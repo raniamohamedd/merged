@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_application_2/Features/patient_side/doctor_review/screens/doctor_details_about_screen.dart';
 import 'package:flutter_application_2/Features/patient_side/doctor_review/screens/doctor_details_tabBar.dart';
 import 'package:flutter_application_2/Features/patient_side/home_screen/model/recomendation_doctor.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';

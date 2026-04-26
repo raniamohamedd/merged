@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/core/services/api_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -14,16 +15,43 @@ class _SettingsPageState extends State<SettingsPage> {
   bool medicationReminders = true;
   bool patientMessages = true;
 
-  final fullNameController =
-      TextEditingController(text: 'Dr. Sarah Mitchell');
-  final emailController =
-      TextEditingController(text: 'sarah.mitchell@hospital.com');
-  final specialtyController =
-      TextEditingController(text: 'Cardiologist');
-  final phoneController =
-      TextEditingController(text: '01012345678');
-  final licenseController =
-      TextEditingController(text: '123456');
+  final fullNameController = TextEditingController();
+  final emailController = TextEditingController();
+  final specialtyController = TextEditingController();
+  final phoneController = TextEditingController();
+  final licenseController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDoctorProfile();
+  }
+
+  // استرجاع بيانات بروفايل الطبيب
+  Future<void> _loadDoctorProfile() async {
+    try {
+      final profileData = await ApiService.getDoctorProfile();
+      setState(() {
+        fullNameController.text = profileData['data']['fullName'];
+        emailController.text = profileData['data']['email'];
+        specialtyController.text = profileData['data']['specialization'];
+        phoneController.text = profileData['data']['phoneNumber'];
+        licenseController.text = profileData['data']['medicalLicense'];
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('فشل تحميل بروفايل الطبيب: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      );
+    }
+  }
 
   void handleSaveSettings() {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -389,7 +417,7 @@ class _SettingsPageState extends State<SettingsPage> {
         Switch(
           value: value,
           onChanged: onChanged,
-          activeColor: AppColors.blueColor,
+          activeThumbColor: AppColors.blueColor,
         ),
       ],
     );

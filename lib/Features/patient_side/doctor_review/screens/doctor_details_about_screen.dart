@@ -31,7 +31,7 @@ class DoctorDetailsAboutScreen extends StatelessWidget {
                   ),
                   _buildSection(
                     "Hospital Name",
-                    "${doctor.hospital}",
+                    doctor.hospital,
                   ),
                   _buildSection(
                     "Working Time",

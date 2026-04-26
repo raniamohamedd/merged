@@ -1,24 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/doctor_side/screens/patient_detailsdoc.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/core/services/api_service.dart';
 
 class Patient {
-  final int id;
+
+  final String userId;   // user id (IMPORTANT)
+ 
+  final String id;
   final String name;
   final int age;
   final int medicationCount;
-  final int adherence;
   final String status;
 
   Patient({
+        required this.userId,
+
     required this.id,
     required this.name,
     required this.age,
     required this.medicationCount,
-    required this.adherence,
     required this.status,
   });
-}
+  static String _getStatus(Map<String, dynamic> json) {
+  final diseases = json['chronicDiseases'] as List?;
+  if (diseases != null && diseases.isNotEmpty) {
+    return diseases[0]['status'] ?? 'stable';
+  }
+  return 'stable';
+}factory Patient.fromJson(Map<String, dynamic> json) {
+  final user = json['userId'] ?? {};
+
+  return Patient(
+    id: json['_id'] ?? '',
+    userId: user['_id'] ?? '',
+    name: user['fullName'] ?? 'Unknown',
+    age: user['DOB'] != null
+        ? DateTime.now().year - DateTime.parse(user['DOB']).year
+        : 0,
+    medicationCount: (json['medications'] as List?)?.length ?? 0,
+    status: _getStatus(json),
+  );
+}}
 
 class PatientsPage extends StatefulWidget {
   const PatientsPage({super.key});
@@ -28,28 +51,54 @@ class PatientsPage extends StatefulWidget {
 }
 
 class _PatientsPageState extends State<PatientsPage> {
-  final List<Patient> allPatients = [
-    Patient(id: 1, name: 'John Doe', age: 45, medicationCount: 5, adherence: 92, status: 'stable'),
-    Patient(id: 2, name: 'Mary Smith', age: 62, medicationCount: 8, adherence: 78, status: 'monitoring'),
-    Patient(id: 3, name: 'Robert King', age: 58, medicationCount: 6, adherence: 95, status: 'stable'),
-    Patient(id: 4, name: 'Lisa Martin', age: 71, medicationCount: 10, adherence: 85, status: 'monitoring'),
-    Patient(id: 5, name: 'James Wilson', age: 55, medicationCount: 7, adherence: 65, status: 'critical'),
-    Patient(id: 6, name: 'Emma Roberts', age: 48, medicationCount: 4, adherence: 88, status: 'stable'),
-    Patient(id: 7, name: 'Michael Brown', age: 67, medicationCount: 9, adherence: 72, status: 'monitoring'),
-    Patient(id: 8, name: 'Sarah Davis', age: 53, medicationCount: 5, adherence: 90, status: 'stable'),
-  ];
+ List<Patient> allPatients = [];
+bool isLoading = true;
+Future<void> loadPatients() async {
+  try {
+    final response = await ApiService.getPatients();
+
+    print("RAW RESPONSE: $response");
+
+    final List data =
+       response['data'] ?? [];
+
+    setState(() {
+      allPatients = data
+          .map((e) => Patient.fromJson(e))
+          .toList();
+
+      isLoading = false;
+    });
+
+    print("LOADED: ${allPatients.length}");
+  } catch (e) {
+    print("ERROR LOAD: $e");
+    setState(() {
+      isLoading = false;
+    });
+  }
+}
+
+@override
+  void initState() {
+  super.initState();
+  loadPatients();
+}
 
   String searchQuery = '';
   String filter = 'all';
 
-  List<Patient> get filteredPatients {
-    return allPatients.where((p) {
-      final matchesSearch =
-          p.name.toLowerCase().contains(searchQuery.toLowerCase());
-      final matchesFilter = filter == 'all' || p.status == filter;
-      return matchesSearch && matchesFilter;
-    }).toList();
-  }
+List<Patient> get filteredPatients {
+  return allPatients.where((p) {
+    final matchesSearch =
+        p.name.toLowerCase().contains(searchQuery.toLowerCase());
+
+    final matchesFilter =
+        filter == 'all' || p.status == filter;
+
+    return matchesSearch && matchesFilter;
+  }).toList();
+}
 
   int get stableCount =>
       allPatients.where((e) => e.status == 'stable').length;
@@ -270,18 +319,18 @@ class _PatientsPageState extends State<PatientsPage> {
           const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(
-                child: _miniInfoBox(
-                  title: "Adherence",
-                  value: "${p.adherence}%",
-                  color: p.adherence >= 85
-                      ? Colors.green
-                      : p.adherence >= 70
-                          ? Colors.orange
-                          : Colors.red,
-                  icon: Icons.show_chart_rounded,
-                ),
-              ),
+              // Expanded(
+              //   child: _miniInfoBox(
+              //     title: "Adherence",
+              //     value: "${p.adherence}%",
+              //     color: p.adherence >= 85
+              //         ? Colors.greenx
+              //         : p.adherence >= 70
+              //             ? Colors.orange
+              //             : Colors.red,
+              //     icon: Icons.show_chart_rounded,
+              //   ),
+              // ),
               const SizedBox(width: 10),
               Expanded(
                 child: _miniInfoBox(
@@ -301,7 +350,7 @@ class _PatientsPageState extends State<PatientsPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => PatientDetailsPage(),
+                    builder: (context) => PatientDetailsPage(patientId: p.userId,),
                   ),
                 );
               },
@@ -430,6 +479,11 @@ class _PatientsPageState extends State<PatientsPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+  return const Scaffold(
+    body: Center(child: CircularProgressIndicator()),
+  );
+}
     return Scaffold(
       backgroundColor: const Color(0xFFF7FAFC),
       body: SafeArea(
@@ -546,10 +600,12 @@ class _PatientsPageState extends State<PatientsPage> {
                               ),
                             ),
                           )
-                        : ListView.builder(
-                            itemCount: filteredPatients.length,
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
+                        :  
+                        ListView.builder(
+                          itemCount: filteredPatients.length,
+  shrinkWrap: true,
+  physics: const BouncingScrollPhysics(),
+                           
                             itemBuilder: (context, index) {
                               return buildPatientCard(filteredPatients[index]);
                             },

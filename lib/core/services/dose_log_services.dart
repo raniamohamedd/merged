@@ -28,7 +28,7 @@ class DoseLogService {
     final logs = await getLogs();
 
     final todayKey = DateTime.now().toIso8601String().substring(0, 10);
-    final doseKey = "${medicationId}_$todayKey\_$scheduledTime";
+    final doseKey = "${medicationId}_${todayKey}_$scheduledTime";
 
     final index = logs.indexWhere((e) => e["doseKey"] == doseKey);
 
@@ -58,7 +58,7 @@ class DoseLogService {
   }) async {
     final logs = await getLogs();
     final todayKey = DateTime.now().toIso8601String().substring(0, 10);
-    final doseKey = "${medicationId}_$todayKey\_$scheduledTime";
+    final doseKey = "${medicationId}_${todayKey}_$scheduledTime";
 
     try {
       return logs.firstWhere((e) => e["doseKey"] == doseKey);

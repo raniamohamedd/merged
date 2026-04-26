@@ -71,7 +71,7 @@ class DoctorHeaderCard extends StatelessWidget {
                     ),
                     SizedBox(width: 5),
                     Text(
-                      '$rating (${numberOfReviews} reviews)',
+                      '$rating ($numberOfReviews reviews)',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.greyColor,

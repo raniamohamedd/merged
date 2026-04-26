@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/core/services/api_service.dart';
 
 class DoctorContact {
-  final int id;
+  final String id;
   final String name;
   final String specialty;
 
@@ -43,63 +44,56 @@ class PatientAlertsPage extends StatefulWidget {
 class _PatientAlertsPageState extends State<PatientAlertsPage> {
   final TextEditingController detailsController = TextEditingController();
 
-  final List<DoctorContact> doctors = [
-    DoctorContact(
-      id: 1,
-      name: "Dr. Sarah Mitchell",
-      specialty: "Cardiologist",
-    ),
-    DoctorContact(
-      id: 2,
-      name: "Dr. Ahmed Ali",
-      specialty: "Dermatologist",
-    ),
-    DoctorContact(
-      id: 3,
-      name: "Dr. Mona Hassan",
-      specialty: "Neurologist",
-    ),
+   List<DoctorContact> doctors = [
   ];
-
-  final List<String> alertTypes = [
-    "Emergency Alert",
-    "Missed Medication",
-    "Side Effect",
-    "New Symptom",
-    "Medication Question",
-    "Follow-up Update",
-  ];
-
   DoctorContact? selectedDoctor;
-  String selectedType = "Emergency Alert";
-  String selectedSeverity = "medium";
 
-  List<PatientAlertItem> sentAlerts = [
-    PatientAlertItem(
-      id: 1,
-      doctorName: "Dr. Sarah Mitchell",
-      type: "New Symptom",
-      severity: "medium",
-      details: "I have been feeling dizzy since this morning.",
-      time: "10:20 AM",
-      status: "sent",
-    ),
-    PatientAlertItem(
-      id: 2,
-      doctorName: "Dr. Ahmed Ali",
-      type: "Side Effect",
-      severity: "high",
-      details: "Skin rash appeared after taking the medication.",
-      time: "Yesterday",
-      status: "viewed",
-    ),
-  ];
+String selectedType = "Emergency Alert";
+String selectedSeverity = "medium";
 
-  @override
-  void initState() {
-    super.initState();
-    selectedDoctor = doctors.first;
+final List<String> alertTypes = [
+  "Emergency Alert",
+  "Missed Medication",
+  "Side Effect",
+  "New Symptom",
+  "Medication Question",
+  "Follow-up Update",
+];
+
+List<PatientAlertItem> sentAlerts = [];
+
+Future<void> loadDoctors() async {
+  try {
+    final List data = await ApiService.getmydoctors();
+
+    setState(() {
+      doctors = data.map<DoctorContact>((doc) {
+        return DoctorContact(
+id: doc['userId']?['_id'] ?? '',          name: doc['userId']?['fullName'] ?? 'Unknown Doctor',
+          specialty: doc['specialization'] ?? 'Doctor',
+        );
+      }).toList();
+
+      if (doctors.isNotEmpty) {
+        selectedDoctor = doctors.first;
+      }
+    });
+
+  } catch (e) {
+    debugPrint("Doctors error: $e");
   }
+}
+
+@override
+void initState() {
+  super.initState();
+  loadDoctors(); // 🔥 أهم سطر
+}
+  // @override
+  // void initState() {
+  //   super.initState();
+  //   selectedDoctor = doctors.first;
+  // }
 
   @override
   void dispose() {
@@ -107,6 +101,21 @@ class _PatientAlertsPageState extends State<PatientAlertsPage> {
     super.dispose();
   }
 
+String mapUpdateType(String type) {
+  switch (type) {
+    case "Emergency Alert":
+    case "Chest Pain":
+      return "chest_pain";
+    case "Breathing Issue":
+      return "breathing";
+    case "Unconscious":
+      return "unconscious";
+    case "Fall":
+      return "fall";
+    default:
+      return "other";
+  }
+}
   Color severityColor(String severity) {
     switch (severity) {
       case "high":
@@ -132,22 +141,24 @@ class _PatientAlertsPageState extends State<PatientAlertsPage> {
         return Colors.grey;
     }
   }
+Future<void> sendAlert() async {
+  if (selectedDoctor == null || detailsController.text.trim().isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text("Please complete all required fields"),
+        backgroundColor: AppColors.blueColor,
+      ),
+    );
+    return;
+  }
 
-  void sendAlert() {
-    if (selectedDoctor == null || detailsController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("Please complete all required fields"),
-          backgroundColor: AppColors.blueColor,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-      );
-      return;
-    }
+  try {
+  await ApiService.createSos(
+  doctorId: selectedDoctor!.id,
+  updateType: mapUpdateType(selectedType),
+  severity: selectedSeverity,
+  details: detailsController.text.trim(),
+);
 
     final newAlert = PatientAlertItem(
       id: DateTime.now().millisecondsSinceEpoch,
@@ -167,9 +178,15 @@ class _PatientAlertsPageState extends State<PatientAlertsPage> {
     });
 
     showSuccessDialog();
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Failed to send SOS: $e"),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
-
-  void showSuccessDialog() {
+} void showSuccessDialog() {
     showDialog(
       context: context,
       builder: (_) {
@@ -741,3 +758,11 @@ class _PatientAlertsPageState extends State<PatientAlertsPage> {
     );
   }
 }
+
+
+
+
+
+
+
+

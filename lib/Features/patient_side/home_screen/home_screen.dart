@@ -1,13 +1,16 @@
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/patient_side/home_screen/medication_info_screen.dart';
 import 'package:flutter_application_2/Features/patient_side/home_screen/widget/header.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/core/services/api_service.dart';
 import 'package:flutter_application_2/core/services/notification_services.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _PatientDashboardUIState();
@@ -63,132 +66,52 @@ int _weekdayFromString(String day) {
   }
 }
   final Map<String, Map<String, String>> medicationDefaults = {
-    "aspirin": {
-      "sideEffects": "Mild stomach pain, heartburn",
-      "warningLevel": "low",
-      "bestTime": "Morning",
-      "usageTip": "Best taken in the morning at the same time every day",
-      "foodAdvice": "Take after food",
-    },
-    "metformin": {
-      "sideEffects": "Nausea, diarrhea, dizziness",
-      "warningLevel": "medium",
-      "bestTime": "Morning & Evening",
-      "usageTip": "Take it regularly at the same times each day",
-      "foodAdvice": "Take with meals",
-    },
-    "lisinopril": {
-      "sideEffects": "Dry cough, dizziness",
-      "warningLevel": "low",
-      "bestTime": "Morning",
-      "usageTip": "Take once daily and monitor blood pressure regularly",
-      "foodAdvice": "Can be taken with or without food",
-    },
-    "atorvastatin": {
-      "sideEffects": "Muscle pain, weakness",
-      "warningLevel": "high",
-      "bestTime": "Night",
-      "usageTip": "Usually preferred at night for better cholesterol control",
-      "foodAdvice": "Can be taken with or without food",
-    },
-    "panadol": {
-      "sideEffects": "Nausea, mild rash",
-      "warningLevel": "low",
-      "bestTime": "As needed",
-      "usageTip": "Use only when needed and do not exceed the recommended dose",
-      "foodAdvice": "Can be taken after food if stomach is sensitive",
-    },
-    "amoxicillin": {
-      "sideEffects": "Diarrhea, skin rash, nausea",
-      "warningLevel": "medium",
-      "bestTime": "Morning / Afternoon / Night",
-      "usageTip": "Take at evenly spaced times",
-      "foodAdvice": "Preferably after food",
-    },
-    "warfarin": {
-      "sideEffects": "Bleeding, bruising, dizziness",
-      "warningLevel": "high",
-      "bestTime": "Evening",
-      "usageTip": "Take at the same time daily and monitor INR regularly",
-      "foodAdvice": "Take consistently with regard to meals",
-    },
-    "insulin": {
-      "sideEffects": "Low blood sugar, sweating, shakiness",
-      "warningLevel": "high",
-      "bestTime": "Before meals / as prescribed",
-      "usageTip": "Follow the schedule exactly as prescribed",
-      "foodAdvice": "Usually related to meals",
-    },
-  };
+     };
  List<Map<String, dynamic>> medications = [
-  {
-    "id": 1000,
-    "name": "Aspirin",
-    "dosage": "100mg",
-    "frequency": "Once daily",
-    "repeatType": "Daily",
-    "weeklyDay": null,
-    "time": "08:00 AM",
-    "reminder": true,
-    "sideEffects": "Mild stomach pain, heartburn",
-    "warningLevel": "low",
-    "bestTime": "Morning",
-    "usageTip": "Best taken in the morning at the same time every day",
-    "foodAdvice": "Take after food",
-  },
-  {
-    "id": 2000,
-    "name": "Metformin",
-    "dosage": "500mg",
-    "frequency": "Twice daily",
-    "repeatType": "Twice daily",
-    "weeklyDay": null,
-    "time": "08:00 AM, 08:00 PM",
-    "reminder": true,
-    "sideEffects": "Nausea, diarrhea, dizziness",
-    "warningLevel": "medium",
-    "bestTime": "Morning & Evening",
-    "usageTip": "Take it regularly at the same times each day",
-    "foodAdvice": "Take with meals",
-  },
-  {
-    "id": 3000,
-    "name": "Lisinopril",
-    "dosage": "10mg",
-    "frequency": "Once daily",
-    "repeatType": "Daily",
-    "weeklyDay": null,
-    "time": "09:00 AM",
-    "reminder": false,
-    "sideEffects": "Dry cough, dizziness",
-    "warningLevel": "low",
-    "bestTime": "Morning",
-    "usageTip": "Take once daily and monitor blood pressure regularly",
-    "foodAdvice": "Can be taken with or without food",
-  },
-  {
-    "id": 4000,
-    "name": "Atorvastatin",
-    "dosage": "20mg",
-    "frequency": "Once daily",
-    "repeatType": "Daily",
-    "weeklyDay": null,
-    "time": "10:00 PM",
-    "reminder": true,
-    "sideEffects": "Muscle pain, weakness",
-    "warningLevel": "high",
-    "bestTime": "Night",
-    "usageTip": "Usually preferred at night for better cholesterol control",
-    "foodAdvice": "Can be taken with or without food",
-  },
+
+
 ];  List<Map<String, String>> upcomingReminders = [];
+Future<void> _loadMedications() async {
+  try {
+    final data = await ApiService.getMyMedications();
 
-  @override
-  void initState() {
-    super.initState();
+    final loaded = data.map<Map<String, dynamic>>((item) {
+      return {
+        "id": item["id"],
+        "name": item["medicationName"] ?? "",
+        "dosage": item["dosage"] ?? "",
+        "frequency": item["repeat"] ?? "",
+        "repeatType": item["repeat"] ?? "",
+        "time": item["reminderTime"] ?? "",
+        "reminder": true,
+        "sideEffects": item["sideEffects"]?.join(", ") ?? "",
+        "warningLevel": item["warningLevel"] ?? "low",
+      };
+    }).toList();
+
+    setState(() {
+      medications = loaded;
+    });
+
+    // 🔥 مهم: جدولة الإشعارات بعد تحميل البيانات
+    for (final med in medications) {
+      if (med["reminder"] == true) {
+        await _scheduleMedicationReminders(med);
+      }
+    }
+
     _refreshUpcomingReminders();
+  } catch (e) {
+    print("Error loading meds: $e");
   }
-
+}@override
+  void initState() {
+  super.initState();
+  _loadMedications();
+}
+int _notifId(int medId, int index, int offset) {
+  return medId * 1000 + index + offset;
+}
   int _generateMedicationId() {
     if (medications.isEmpty) return 5000;
     final ids = medications
@@ -234,61 +157,113 @@ int _weekdayFromString(String day) {
     if (times.isEmpty) return false;
     return times.every(_isValidSingleTime);
   }
+int reminderId(int medId, int i) {
+  return medId * 1000 + i;
+}
+int followUpId(int medId, int i) {
+  return medId * 1000 + 500 + i;
+}
+DateTime _parseTimeToDate(String timeText) {
+  final now = DateTime.now();
 
-  DateTime _parseTimeToDate(String timeText) {
-    final parts = timeText.trim().split(RegExp(r'[: ]'));
-    int hour = int.parse(parts[0]);
-    int minute = int.parse(parts[1]);
-    final ampm = parts[2].toUpperCase();
+  final cleaned = timeText.trim().toUpperCase();
 
-    if (ampm == 'PM' && hour != 12) hour += 12;
-    if (ampm == 'AM' && hour == 12) hour = 0;
+  // Case 1: AM/PM format
+  final ampmRegex = RegExp(r'(\d{1,2}):(\d{2})\s?(AM|PM)');
+  final ampmMatch = ampmRegex.firstMatch(cleaned);
 
-    final now = DateTime.now();
-    DateTime scheduledDate = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      hour,
-      minute,
-    );
+  int hour;
+  int minute;
 
-    if (scheduledDate.isBefore(now)) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
-    }
+  if (ampmMatch != null) {
+    hour = int.parse(ampmMatch.group(1)!);
+    minute = int.parse(ampmMatch.group(2)!);
+    final period = ampmMatch.group(3)!;
 
-    return scheduledDate;
+    if (period == "PM" && hour != 12) hour += 12;
+    if (period == "AM" && hour == 12) hour = 0;
+  } else {
+    // Case 2: 24-hour format (08:00)
+   final parts = cleaned.split(":");
+if (parts.length < 2) throw Exception("Invalid time format");
+
+hour = int.parse(parts[0]);
+minute = int.parse(parts[1]);
   }
+
+  DateTime scheduled = DateTime(
+    now.year,
+    now.month,
+    now.day,
+    hour,
+    minute,
+  );
+
+  if (scheduled.isBefore(now)) {
+    scheduled = scheduled.add(const Duration(days: 1));
+  }
+
+  return scheduled;
+}
  Future<void> _scheduleMedicationReminders(Map<String, dynamic> med) async {
   final times = _extractTimes(med["time"] as String);
+  final repeatType = med["repeatType"];
 
   for (int i = 0; i < times.length; i++) {
     final timeText = times[i];
-    final scheduledDate = _parseTimeToDate(timeText);
 
-    // 🔹 النوتيفيكيشن الأساسي
+    print("TIME = ${med["time"]}");
+    print("timeText = $timeText");
+
+    final localDate = _parseTimeToDate(timeText);
+
+    DateTime finalDate = localDate;
+
+    // weekly fix
+    if (repeatType == "Weekly" && med["weeklyDay"] != null) {
+      final targetWeekday = _weekdayFromString(med["weeklyDay"]);
+
+      while (finalDate.weekday != targetWeekday) {
+        finalDate = finalDate.add(const Duration(days: 1));
+      }
+    }
+
+    final scheduledTime = tz.TZDateTime.from(finalDate, tz.local);
+
+    final followUpTime = tz.TZDateTime.from(
+      finalDate.add(const Duration(minutes:1)),
+      tz.local,
+    );
+
+    // reminder
     await NotificationService.showScheduledNotification(
-      id: (med["id"] as int) + i,
-      title: 'Reminder: ${med["name"]}',
+id: med["id"].hashCode + i,      title: 'Reminder: ${med["name"]}',
       body: 'Time to take ${med["dosage"]} at $timeText',
-      scheduledTime: tz.TZDateTime.from(scheduledDate, tz.local),
+      scheduledTime: scheduledTime,
     );
-
-    // 🔹 نوتيفيكيشن بعد 5 دقائق (الجديد)
-    final followUpTime = scheduledDate.add(const Duration(minutes: 5));
-
-    await NotificationService.showScheduledNotification(
-      id: (med["id"] as int) + i + 1000, // مهم ID مختلف
-      title: 'Did you take ${med["name"]}?',
-      body: 'Please confirm if you took ${med["dosage"]}',
-      scheduledTime: tz.TZDateTime.from(followUpTime, tz.local),
-    );
+print("🔥 Scheduling at: $scheduledTime");
+print("🔥 Medication: ${med["name"]}");
+    // follow up
+   await NotificationService.showScheduledNotification(
+  id: med["id"].hashCode + i + 1000,
+  title: 'Did you take ${med["name"]}?',
+  body: 'Please confirm your dose',
+  scheduledTime: followUpTime,
+  payload: jsonEncode({
+    "type": "dose_confirmation",
+    "medicationId": med["id"],
+    "medicationName": med["name"],
+    "dosage": med["dosage"],
+    "scheduledTime": followUpTime.toString(),
+  }),
+);
   }
-} Future<void> _cancelMedicationReminders(Map<String, dynamic> med) async {
+}Future<void> _cancelMedicationReminders(Map<String, dynamic> med) async {
     final times = _extractTimes(med["time"] as String);
 
     for (int i = 0; i < times.length; i++) {
-      await NotificationService.cancelNotification((med["id"] as int) + i);
+      await NotificationService.cancelNotification(  med["id"].hashCode + i,
+);
     }
   }
 
@@ -315,6 +290,25 @@ String _formatTime12(int hour, int minute, String period) {
   final formattedMinute = minute.toString().padLeft(2, '0');
   return "$formattedHour:$formattedMinute $period";
 }
+
+String formatTimeForApi(String time) {
+  final parts = time.split(' ');
+  final hm = parts[0];
+  final ampm = parts[1];
+
+  int hour = int.parse(hm.split(':')[0]);
+  int minute = int.parse(hm.split(':')[1]);
+
+  if (ampm == "PM" && hour != 12) hour += 12;
+  if (ampm == "AM" && hour == 12) hour = 0;
+
+  return "${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}";
+}
+
+
+
+
+
 
 Future<String?> _showTimeWheelPicker({
   String? initialTime,
@@ -529,14 +523,9 @@ Future<String?> _showTimeWheelPicker({
       setState(() {
         _refreshUpcomingReminders();
       });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Reminder error: $e"),
-          backgroundColor: Colors.red,
-        ),
-      );
+    } 
+    catch (e) {
+     Navigator.pop(context);
     }
   }
 
@@ -704,7 +693,7 @@ Future<String?> _showTimeWheelPicker({
                   const SizedBox(height: 14),
 
                   DropdownButtonFormField<String>(
-                    value: repeatType,
+                    initialValue: repeatType,
                     decoration: customInput("Repeat", Icons.repeat),
                     items: repeatOptions.map((item) {
                       return DropdownMenuItem(
@@ -735,7 +724,7 @@ Future<String?> _showTimeWheelPicker({
 
                   if (repeatType == "Weekly")
                     DropdownButtonFormField<String>(
-                      value: weeklyDay,
+                      initialValue: weeklyDay,
                       decoration: customInput("Day of week", Icons.calendar_today),
                       items: weekDays.map((day) {
                         return DropdownMenuItem(
@@ -893,7 +882,7 @@ Future<String?> _showTimeWheelPicker({
                   const SizedBox(height: 14),
 
                   DropdownButtonFormField<String>(
-                    value: warningLevel.isEmpty ? null : warningLevel,
+                    initialValue: warningLevel.isEmpty ? null : warningLevel,
                     decoration: customInput(
                       "Warning Level (Optional)",
                       Icons.info_outline,
@@ -941,80 +930,74 @@ Future<String?> _showTimeWheelPicker({
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      onPressed: () async {
-                        if (medName.trim().isEmpty ||
-                            dosage.trim().isEmpty ||
-                            selectedTimes.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                "Please fill medication, dosage and choose at least one time",
-                              ),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                          return;
-                        }
+                      onPressed:
+                      
+                     () async {
+  if (medName.trim().isEmpty ||
+      dosage.trim().isEmpty ||
+      selectedTimes.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("من فضلك املى البيانات"),
+        backgroundColor: Colors.red,
+      ),
+    );
+    return;
+  }
 
-                        try {
-                          final defaultData = getDefaultMedicationData(medName);
+  try {
+    // تحويل side effects → list
+    final sideEffectsList = sideEffects
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
 
-                          final finalSideEffects = sideEffects.trim().isEmpty
-                              ? defaultData["sideEffects"]!
-                              : sideEffects.trim();
+    // 🔥 استدعاء API
+   await ApiService.addMedication(
+  medicationName: medName.trim(),
+  dosage: dosage.trim(),
+  repeat: mapRepeatToApi(repeatType), // ✅ FIX
+reminderTime: selectedTimes.map(formatTimeForApi).join(","),  sideEffects: sideEffectsList,
+  warningLevel: mapWarningToApi(
+    warningLevel.isEmpty ? "low" : warningLevel,
+  ), // ✅ FIX
+  startDate: getStartDate(), // ✅ مهم جدًا
+);
+    // ✅ إضافة في UI
+final newMed = {
+  "id": DateTime.now().millisecondsSinceEpoch,
+  "name": medName,
+  "dosage": dosage,
+  "frequency": repeatType,
+  "repeatType": repeatType,
+  "weeklyDay": repeatType == "Weekly" ? weeklyDay : null, // ✅ مهم
+  "time": selectedTimes.join(", "),
+  "reminder": true,
+  "sideEffects": sideEffects,
+  "warningLevel": warningLevel.isEmpty ? "low" : warningLevel, // ✅ fix
+};
 
-                          final finalWarningLevel = warningLevel.isEmpty
-                              ? defaultData["warningLevel"]!
-                              : warningLevel;
+    setState(() {
+      medications.add(newMed);
+      _refreshUpcomingReminders();
+    });
 
-                          final int newId = _generateMedicationId();
-                          final selectedTimesString = selectedTimes.join(", ");
+    await _scheduleMedicationReminders(newMed);
 
-                          final newMedication = <String, dynamic>{
-                            "id": newId,
-                            "name": medName.trim(),
-                            "dosage": dosage.trim(),
-                            "frequency":
-                                _buildFrequencyLabel(repeatType, selectedTimes),
-                            "repeatType": repeatType,
-                            "weeklyDay": repeatType == "Weekly" ? weeklyDay : null,
-                            "time": selectedTimesString,
-                            "reminder": true,
-                            "sideEffects": finalSideEffects,
-                            "warningLevel": finalWarningLevel,
-                            "bestTime": defaultData["bestTime"]!,
-                            "usageTip": defaultData["usageTip"]!,
-                            "foodAdvice": defaultData["foodAdvice"]!,
-                          };
+    Navigator.pop(context);
 
-                          setState(() {
-                            medications.add(newMedication);
-                            _refreshUpcomingReminders();
-                          });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("تمت الإضافة بنجاح"),
+        backgroundColor: AppColors.blueColor,
+      ),
+    );
+  } catch (e) {
+        Navigator.pop(context);
 
-                          await _scheduleMedicationReminders(newMedication);
-
-                          if (!mounted) return;
-                          Navigator.pop(context);
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                "Reminder added for ${newMedication["name"]}",
-                              ),
-                              backgroundColor: AppColors.blueColor,
-                            ),
-                          );
-                        } catch (e) {
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text("Error scheduling reminder: $e"),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
-                      },
+  }
+},
                       child: const Text(
                         "Add",
                         style: TextStyle(color: Colors.white),
@@ -1102,7 +1085,38 @@ Future<String?> _showTimeWheelPicker({
       );
     });
   }
-
+String mapRepeatToApi(String repeatType) {
+  switch (repeatType) {
+    case "Daily":
+      return "daily";
+    case "Weekly":
+      return "weekly";
+    case "Twice daily":
+    case "Three times daily":
+    case "Custom times":
+      return "every_x_hours";
+    default:
+      return "daily";
+  }
+}
+String mapWarningToApi(String level) {
+  switch (level) {
+    case "low":
+      return "safe";
+    case "medium":
+      return "moderate";
+    case "high":
+      return "severe";
+    default:
+      return "safe";
+  }
+}
+String getStartDate() {
+  final now = DateTime.now().toUtc();
+  final formatted =
+      "${now.toIso8601String().split('.')[0]}Z";
+  return formatted;
+}
   void openAddReminderDialog() {
     showDialog(
       context: context,
@@ -1149,8 +1163,7 @@ Future<String?> _showTimeWheelPicker({
 
   Widget dismissibleMedicationCard(Map<String, dynamic> med) {
     return Dismissible(
-      key: Key(med["id"].toString()),
-      direction: DismissDirection.endToStart,
+key: ValueKey("${med["id"]}_${med["name"]}"),      direction: DismissDirection.endToStart,
       background: Container(
         padding: const EdgeInsets.only(right: 20),
         alignment: Alignment.centerRight,
@@ -1517,6 +1530,7 @@ Future<String?> _showTimeWheelPicker({
 
   @override
   Widget build(BuildContext context) {
+    
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 249, 249, 249),
       body: SingleChildScrollView(
@@ -1653,7 +1667,7 @@ Future<String?> _showTimeWheelPicker({
                       ),
                     ],
                   ),
-            Text("Dosage: ${med["dosage"]}"),
+            Text("Dosage: ${med["dosage"]} mg"),
 Text("Frequency: ${med["frequency"]}"),
 if (med["repeatType"] != null)
   Text(
