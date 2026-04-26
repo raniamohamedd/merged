@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/Features/doctor_side/chats_doctor/chat_detailsPatient.dart' hide AppColors;
 import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chat_details_screen.dart' hide AppColors;
 import 'package:flutter_application_2/Features/patient_side/profile/view/profile_view.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
@@ -52,7 +53,8 @@ Future<void> loadDoctors() async {
     setState(() {
       doctors = data.map<DoctorContact>((doc) {
         return DoctorContact(
-         id: doc['_id'] ?? '',
+                   id: doc['userId']?['_id'] ?? 'Unknown',
+
           name: doc['userId']?['fullName'] ?? 'Unknown',
           specialty: doc['specialization'] ?? 'Doctor',
           phone: doc['userId']?['phone'] ?? '',
@@ -229,7 +231,7 @@ void initState() {
   Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (context) => ChatsPageDoctor(
+      builder: (context) => ChatsPagePatient(
         doctorName: doctor.name,
         chatId: doctor.id, // 🔥 use API id
       ),

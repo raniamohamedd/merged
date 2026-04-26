@@ -1,13 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chats_list_screen.dart' hide AppColors;
 import 'package:flutter_application_2/Features/doctor_side/screens/chat_list_screenpatient.dart';
 import 'package:flutter_application_2/Features/patient_side/calender/calender_screen.dart';
 import 'package:flutter_application_2/Features/patient_side/home_screen/home_screen.dart';
 // import 'package:health_care_app/Features/patient_side/profile/profile_screen.dart';
 import 'package:flutter_application_2/Features/patient_side/profile/view/profile_view.dart';
 import 'package:flutter_application_2/Features/patient_side/search/search_screen.dart';
-import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:animated_bottom_navigation_bar/animated_bottom_navigation_bar.dart';
 
 class NavigationnScreen extends StatefulWidget {

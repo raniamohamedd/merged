@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chat_details_screen.dart' hide AppColors;
-import 'package:flutter_application_2/Features/patient_side/chats/view/chat_details_screen.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
 

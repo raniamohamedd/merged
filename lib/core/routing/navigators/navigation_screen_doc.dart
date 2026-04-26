@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/doctor_side/screens/chat_list_screendoc.dart';
-import 'package:flutter_application_2/Features/doctor_side/screens/chat_list_screenpatient.dart' hide AppColors;
 import 'package:flutter_application_2/Features/doctor_side/screens/dashboard.dart';
 import 'package:flutter_application_2/Features/doctor_side/screens/emergency_doc.dart';
 import 'package:flutter_application_2/Features/doctor_side/screens/medication_report_page.dart';

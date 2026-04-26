@@ -32,6 +32,7 @@ class Patient {
   final user = json['userId'] ?? {};
 
   return Patient(
+    
     id: json['_id'] ?? '',
     userId: user['_id'] ?? '',
     name: user['fullName'] ?? 'Unknown',
