@@ -48,6 +48,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
 
   int get unreadTotal => patients.fold(0, (s, p) => s + p.unreadCount);
 
+  // ── تحميل المرضى ─────────────────────────────────────────────────────────
   Future<void> loadPatients() async {
     try {
       final response = await ApiService.getPatients();
@@ -84,6 +85,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
     }
   }
 
+  // ── جلب آخر رسالة لكل محادثة عبر Socket ─────────────────────────────────
   Future<void> _fetchLastMessages(List<PatientChatItem> items) async {
     if (items.isEmpty) return;
 
@@ -104,20 +106,23 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
     _previewSocket!.onConnect((_) {
       for (final p in items) {
         if (p.userId.isNotEmpty) {
+          // نجيب أحدث 20 رسالة ونخد آخر واحدة
           _previewSocket!.emit('getHistory', {
             'withUserId': p.userId,
             'page': 1,
-            'limit': 1,
+            'limit': 20,
           });
         }
       }
     });
 
+    // استقبال تاريخ المحادثة - نعرض آخر رسالة حقيقية
     _previewSocket!.on('chatHistory', (data) {
       if (!mounted) return;
       final msgs = (data['messages'] as List?) ?? [];
       if (msgs.isEmpty) return;
 
+      // الرسائل بتيجي مرتبة من الأحدث - نخد أول واحدة
       final lastMsg = msgs.first;
       final senderId = lastMsg['senderId']?.toString() ?? '';
       final receiverId = lastMsg['receiverId']?.toString() ?? '';
@@ -136,33 +141,46 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
       }
     });
 
-    _previewSocket!.on('newMessage', (data) {
-      if (!mounted) return;
-      final senderId = data['senderId']?.toString() ?? '';
-      final text = data['message']?.toString() ?? '';
+_previewSocket!.on('newMessage', (data) {
+  if (!mounted) return;
 
-      final idx = patients.indexWhere((p) => p.userId == senderId);
-      if (idx != -1) {
-        setState(() {
-          patients[idx].lastMessage = text.isEmpty ? '📎 Media' : text;
-          patients[idx].lastMessageTime = _formatTime(null);
-          patients[idx].unreadCount += 1;
-          final item = patients.removeAt(idx);
-          patients.insert(0, item);
-        });
-      }
+  final senderId = data['senderId']?.toString() ?? '';
+  final receiverId = data['receiverId']?.toString() ?? '';
+  final text = data['message']?.toString() ?? '';
+  final createdAt = data['createdAt']?.toString() ?? '';
+
+  final idx = patients.indexWhere(
+    (p) => p.userId == senderId || p.userId == receiverId,
+  );
+
+  if (idx != -1) {
+    setState(() {
+      patients[idx].lastMessage =
+          text.isEmpty ? '📎 Media' : text;
+
+      patients[idx].lastMessageTime =
+          _formatTime(createdAt);
+
+      patients[idx].unreadCount += 1;
+
+      // 👇 أهم جزء: حرك الشات للأعلى
+      final item = patients.removeAt(idx);
+      patients.insert(0, item);
     });
   }
+}
+    );
+  }
 
+  // ── تنسيق الوقت من ISO string ─────────────────────────────────────────────
   String _formatTime(String? iso) {
-    if (iso == null || iso.isEmpty) {
-      final n = TimeOfDay.now();
-      return '${n.hour.toString().padLeft(2, '0')}:${n.minute.toString().padLeft(2, '0')}';
-    }
+    if (iso == null || iso.isEmpty) return _nowTime();
     try {
       final dt = DateTime.parse(iso).toLocal();
       final now = DateTime.now();
-      if (dt.day == now.day && dt.month == now.month && dt.year == now.year) {
+      if (dt.day == now.day &&
+          dt.month == now.month &&
+          dt.year == now.year) {
         return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
       } else if (now.difference(dt).inDays == 1) {
         return 'Yesterday';
@@ -170,8 +188,13 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
         return '${dt.day}/${dt.month}';
       }
     } catch (_) {
-      return '';
+      return _nowTime();
     }
+  }
+
+  String _nowTime() {
+    final now = DateTime.now();
+    return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -187,7 +210,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
     super.dispose();
   }
 
-  // ─── Avatar ───────────────────────────────────────────────────────────────
+  // ── بناء الأفاتار بالصورة أو الحروف ─────────────────────────────────────
   Widget _buildInitialsAvatar(String name) {
     return Container(
       color: AppColors.blueColor.withOpacity(.12),
@@ -250,6 +273,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
                   : _buildInitialsAvatar(patient.name),
             ),
           ),
+          // نقطة الأونلاين
           Positioned(
             bottom: -1,
             right: -1,
@@ -276,7 +300,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
 
-  // ─── Chat Tile ────────────────────────────────────────────────────────────
+  // ── Chat Tile ─────────────────────────────────────────────────────────────
   Widget _buildChatTile(PatientChatItem patient) {
     final hasUnread = patient.unreadCount > 0;
 
@@ -319,6 +343,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
             ),
             child: Row(
               children: [
+                // الأفاتار بالصورة الحقيقية
                 buildAvatar(patient),
                 const SizedBox(width: 12),
                 Expanded(
@@ -337,6 +362,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
                       ),
                       const SizedBox(height: 5),
                       Text(
+                        // عرض آخر رسالة حقيقية
                         patient.lastMessage.isEmpty
                             ? 'Tap to start chatting...'
                             : patient.lastMessage,
@@ -359,6 +385,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
+                    // الوقت الحقيقي للرسالة
                     Text(
                       patient.lastMessageTime,
                       style: TextStyle(
@@ -404,7 +431,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
     );
   }
 
-  // ─── Header ───────────────────────────────────────────────────────────────
+  // ── Header ────────────────────────────────────────────────────────────────
   Widget _buildTopCard() {
     return Container(
       width: double.infinity,

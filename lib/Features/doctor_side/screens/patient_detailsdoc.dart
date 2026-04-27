@@ -79,30 +79,26 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
 
   Future<void> loadPatient() async {
     try {
-      final response =
-          await ApiService.getPatientById(widget.patientId);
-
+      final response = await ApiService.getPatientById(widget.patientId);
       setState(() {
         patientData = response["data"];
       });
     } catch (e) {
-  showErrorDialog(context, message: e.toString());
+      showErrorDialog(context, message: e.toString());
     }
   }
 
-int calculateAge(String dob) {
-  final birthDate = DateTime.parse(dob);
-  final today = DateTime.now();
-
-  int age = today.year - birthDate.year;
-
-  if (today.month < birthDate.month ||
-      (today.month == birthDate.month && today.day < birthDate.day)) {
-    age--;
+  int calculateAge(String dob) {
+    final birthDate = DateTime.parse(dob);
+    final today = DateTime.now();
+    int age = today.year - birthDate.year;
+    if (today.month < birthDate.month ||
+        (today.month == birthDate.month && today.day < birthDate.day)) {
+      age--;
+    }
+    return age;
   }
 
-  return age;
-}
   Color statusColor(String status) {
     switch (status.toLowerCase()) {
       case 'stable':
@@ -181,11 +177,7 @@ int calculateAge(String dob) {
         CircleAvatar(
           radius: 18,
           backgroundColor: AppColors.blueColor.withOpacity(.10),
-          child: Icon(
-            icon,
-            color: AppColors.blueColor,
-            size: 18,
-          ),
+          child: Icon(icon, color: AppColors.blueColor, size: 18),
         ),
         const SizedBox(width: 10),
         Text(
@@ -264,11 +256,7 @@ int calculateAge(String dob) {
               CircleAvatar(
                 radius: 22,
                 backgroundColor: AppColors.blueColor.withOpacity(.10),
-                child: Icon(
-                  Icons.medication_outlined,
-                  color: AppColors.blueColor,
-                  size: 22,
-                ),
+                child: Icon(Icons.medication_outlined, color: AppColors.blueColor, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -282,8 +270,7 @@ int calculateAge(String dob) {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
                   color: takenBg,
                   borderRadius: BorderRadius.circular(30),
@@ -404,11 +391,7 @@ int calculateAge(String dob) {
           CircleAvatar(
             radius: 18,
             backgroundColor: severityColor(symptom.severity).withOpacity(.12),
-            child: Icon(
-              Icons.monitor_heart_outlined,
-              color: severityColor(symptom.severity),
-              size: 18,
-            ),
+            child: Icon(Icons.monitor_heart_outlined, color: severityColor(symptom.severity), size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -417,20 +400,12 @@ int calculateAge(String dob) {
               children: [
                 Text(
                   symptom.date,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: Color(0xFF1F2937),
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF1F2937)),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   symptom.description,
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    fontSize: 13,
-                    height: 1.4,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade700, fontSize: 13, height: 1.4),
                 ),
               ],
             ),
@@ -443,13 +418,8 @@ int calculateAge(String dob) {
               borderRadius: BorderRadius.circular(30),
             ),
             child: Text(
-              symptom.severity[0].toUpperCase() +
-                  symptom.severity.substring(1).toLowerCase(),
-              style: TextStyle(
-                color: severityColor(symptom.severity),
-                fontWeight: FontWeight.w700,
-                fontSize: 11,
-              ),
+              symptom.severity[0].toUpperCase() + symptom.severity.substring(1).toLowerCase(),
+              style: TextStyle(color: severityColor(symptom.severity), fontWeight: FontWeight.w700, fontSize: 11),
             ),
           ),
         ],
@@ -472,29 +442,19 @@ int calculateAge(String dob) {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: Colors.red.withOpacity(.10),
-                child: const Icon(
-                  Icons.warning_amber_rounded,
-                  color: Colors.red,
-                  size: 18,
-                ),
+                child: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 18),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   em.date,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: Color(0xFF1F2937),
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF1F2937)),
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: em.resolved
-                      ? Colors.green.shade50
-                      : Colors.red.shade100,
+                  color: em.resolved ? Colors.green.shade50 : Colors.red.shade100,
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Text(
@@ -513,11 +473,7 @@ int calculateAge(String dob) {
             alignment: Alignment.centerLeft,
             child: Text(
               em.reason,
-              style: TextStyle(
-                color: Colors.grey.shade700,
-                fontSize: 13,
-                height: 1.4,
-              ),
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 13, height: 1.4),
             ),
           ),
         ],
@@ -525,48 +481,102 @@ int calculateAge(String dob) {
     );
   }
 
+  // ── فتح الصورة بالحجم الكامل مع إمكانية التكبير ─────────────────────────
+  void _openFullScreenImage(String imageUrl) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            iconTheme: const IconThemeData(color: Colors.white),
+            title: const Text(
+              'Patient Photo',
+              style: TextStyle(color: Colors.white, fontSize: 16),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              panEnabled: true,
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.contain,
+                loadingBuilder: (_, child, progress) {
+                  if (progress == null) return child;
+                  return const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  );
+                },
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.broken_image,
+                  color: Colors.white,
+                  size: 80,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (patientData == null) {
-  return const Scaffold(
-    body: Center(child: CircularProgressIndicator()),
-  );
-}if (patientData == null || patientData!["userId"] == null) {
-  return const Scaffold(
-    body: Center(child: Text("Patient data not found")),
-  );
-}
-     final medications = (patientData?["medications"] as List?) ?? [];
-final symptoms = (patientData?["symptoms"] as List?) ?? [];
-final emergencies = (patientData?["emergencyHistory"] as List?) ?? [];
-final diseases = (patientData?["chronicDiseases"] as List?) ?? [];
-final user = patientData?["userId"];
-final phone = user?["phone"] ?? "";
-final gender = user?["gender"] ?? "";
-final bloodType = patientData?["bloodType"] ?? "";
-final height = patientData?["height"]?.toString() ?? "";
-final weight = patientData?["weight"]?.toString() ?? "";
-final allergies = patientData?["allergies"] ?? "";
-final name = user?["fullName"] ?? "Unknown";
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (patientData == null || patientData!["userId"] == null) {
+      return const Scaffold(
+        body: Center(child: Text("Patient data not found")),
+      );
+    }
 
-final dob = user?["DOB"];
-final age = (dob != null && dob.toString().isNotEmpty)
-    ? calculateAge(dob)
-    : 0;
-final status = diseases.isNotEmpty
-    ? diseases[0]["status"] ?? "stable"
-    : "stable";
+    final medications = (patientData?["medications"] as List?) ?? [];
+    final symptoms = (patientData?["symptoms"] as List?) ?? [];
+    final emergencies = (patientData?["emergencyHistory"] as List?) ?? [];
+    final diseases = (patientData?["chronicDiseases"] as List?) ?? [];
+    final user = patientData?["userId"];
+    final phone = user?["phone"] ?? "";
+    final gender = user?["gender"] ?? "";
+    final bloodType = patientData?["bloodType"] ?? "";
+    final height = patientData?["height"]?.toString() ?? "";
+    final weight = patientData?["weight"]?.toString() ?? "";
+    final allergies = patientData?["allergies"] ?? "";
+    final name = user?["fullName"] ?? "Unknown";
 
-final conditions =
-    diseases.map<String>((e) => e["name"].toString()).toList();
+    final dob = user?["DOB"];
+    final age = (dob != null && dob.toString().isNotEmpty)
+        ? calculateAge(dob)
+        : 0;
+    final status = diseases.isNotEmpty
+        ? diseases[0]["status"] ?? "stable"
+        : "stable";
+
+    final conditions =
+        diseases.map<String>((e) => e["name"].toString()).toList();
     final patientStatusColor = statusColor(status);
+
+    // استخراج رابط الصورة
+    final userImage = user?['image'];
+    String? patientImageUrl;
+    if (userImage is Map) {
+      patientImageUrl = userImage['secure_url']?.toString();
+    } else if (userImage is String && userImage.isNotEmpty) {
+      patientImageUrl = userImage;
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7FAFC),
       body: SafeArea(
         child: Column(
           children: [
-            /// HEADER الثابت
+            // ── Header الثابت ────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 40, 16, 0),
               child: Container(
@@ -594,53 +604,74 @@ final conditions =
                       ),
                     ),
                     const SizedBox(width: 4),
-                   // في الـ build دور على الكونتينر ده وعدّله
-Container(
-  width: 56,
-  height: 56,
-  decoration: BoxDecoration(
-    borderRadius: BorderRadius.circular(18),
-    border: Border.all(
-      color: Colors.white.withOpacity(.3),
-      width: 2,
-    ),
-  ),
-  child: ClipRRect(
-    borderRadius: BorderRadius.circular(16),
-    child: () {
-      final userImage = user?['image'];
-      String? imageUrl;
-      if (userImage is Map) {
-        imageUrl = userImage['secure_url']?.toString();
-      } else if (userImage is String && userImage.isNotEmpty) {
-        imageUrl = userImage;
-      }
 
-      if (imageUrl != null && imageUrl.isNotEmpty) {
-        return Image.network(
-          imageUrl,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            color: Colors.white.withOpacity(.18),
-            child: const Icon(
-              Icons.person_outline_rounded,
-              color: Colors.white,
-              size: 28,
-            ),
-          ),
-        );
-      }
-      return Container(
-        color: Colors.white.withOpacity(.18),
-        child: const Icon(
-          Icons.person_outline_rounded,
-          color: Colors.white,
-          size: 28,
-        ),
-      );
-    }(),
-  ),
-),  const SizedBox(width: 14),
+                    // ── صورة المريض قابلة للتكبير ───────────────────────
+                    GestureDetector(
+                      onTap: patientImageUrl != null
+                          ? () => _openFullScreenImage(patientImageUrl!)
+                          : null,
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(.3),
+                            width: 2,
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: patientImageUrl != null &&
+                                  patientImageUrl.isNotEmpty
+                              ? Stack(
+                                  children: [
+                                    Image.network(
+                                      patientImageUrl,
+                                      fit: BoxFit.cover,
+                                      width: 56,
+                                      height: 56,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: Colors.white.withOpacity(.18),
+                                        child: const Icon(
+                                          Icons.person_outline_rounded,
+                                          color: Colors.white,
+                                          size: 28,
+                                        ),
+                                      ),
+                                    ),
+                                    // أيقونة تدل على إمكانية التكبير
+                                    Positioned(
+                                      bottom: 2,
+                                      right: 2,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(.4),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: const Icon(
+                                          Icons.zoom_in,
+                                          color: Colors.white,
+                                          size: 10,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Container(
+                                  color: Colors.white.withOpacity(.18),
+                                  child: const Icon(
+                                    Icons.person_outline_rounded,
+                                    color: Colors.white,
+                                    size: 28,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -654,60 +685,44 @@ Container(
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text(
+                          const Text(
                             "Patient Details",
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                            ),
+                            style: TextStyle(color: Colors.white70, fontSize: 13),
                           ),
                         ],
                       ),
                     ),
-                 InkWell(
-                  
-                   child: 
-                   SizedBox(
+
+                    // زر الشات
+                    InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ChatsPageDoctor(
+                              doctorName: name,
+                              chatId: widget.patientId,
+                            ),
+                          ),
+                        );
+                      },
+                      child: SizedBox(
                         width: 56,
                         height: 56,
-                        // decoration: BoxDecoration(
-                        //   color: Colors.white.withOpacity(.18),
-                        //   borderRadius: BorderRadius.circular(18),
-                        // ),
                         child: const Icon(
                           Icons.chat_bubble_outline,
                           color: Colors.white,
                           size: 28,
                         ),
                       ),
-                
-                onTap: () {
-                    //  Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ChatsPageDoctor(
-                                        doctorName: 'john smith',
-                                        chatId: 'hh',
-                                      ),
-                        
-                        // (route) => false,
-                      ));
-                
-                  },
-                       
-                
-                
-                
-                
-                
-                 ),
-                    const SizedBox(width: 14),  ],
+                    ),
+                    const SizedBox(width: 14),
+                  ],
                 ),
               ),
             ),
 
-            /// SCROLLABLE
+            // ── محتوى قابل للتمرير ────────────────────────────────────
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
@@ -715,73 +730,71 @@ Container(
                   children: [
                     const SizedBox(height: 16),
 
-buildSoftCard(
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      sectionTitle("Personal Info", Icons.person_outline),
-      const SizedBox(height: 16),
+                    buildSoftCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          sectionTitle("Personal Info", Icons.person_outline),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              infoMiniCard(
+                                title: "Phone",
+                                value: phone,
+                                icon: Icons.phone_outlined,
+                                color: Colors.green,
+                              ),
+                              const SizedBox(width: 10),
+                              infoMiniCard(
+                                title: "Gender",
+                                value: gender,
+                                icon: Icons.person_outline,
+                                color: Colors.purple,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              infoMiniCard(
+                                title: "Blood",
+                                value: bloodType,
+                                icon: Icons.bloodtype_outlined,
+                                color: Colors.red,
+                              ),
+                              const SizedBox(width: 10),
+                              infoMiniCard(
+                                title: "Height",
+                                value: "$height cm",
+                                icon: Icons.height,
+                                color: Colors.blue,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              infoMiniCard(
+                                title: "Weight",
+                                value: "$weight kg",
+                                icon: Icons.monitor_weight_outlined,
+                                color: Colors.orange,
+                              ),
+                              const SizedBox(width: 10),
+                              infoMiniCard(
+                                title: "Allergies",
+                                value: allergies,
+                                icon: Icons.warning_amber_outlined,
+                                color: Colors.redAccent,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
 
-      Row(
-        children: [
-          infoMiniCard(
-            title: "Phone",
-            value: phone,
-            icon: Icons.phone_outlined,
-            color: Colors.green,
-          ),
-          const SizedBox(width: 10),
-          infoMiniCard(
-            title: "Gender",
-            value: gender,
-            icon: Icons.person_outline,
-            color: Colors.purple,
-          ),
-        ],
-      ),
+                    const SizedBox(height: 16),
 
-      const SizedBox(height: 10),
-
-      Row(
-        children: [
-          infoMiniCard(
-            title: "Blood",
-            value: bloodType,
-            icon: Icons.bloodtype_outlined,
-            color: Colors.red,
-          ),
-          const SizedBox(width: 10),
-          infoMiniCard(
-            title: "Height",
-            value: "$height cm",
-            icon: Icons.height,
-            color: Colors.blue,
-          ),
-        ],
-      ),
-
-      const SizedBox(height: 10),
-
-      Row(
-        children: [
-          infoMiniCard(
-            title: "Weight",
-            value: "$weight kg",
-            icon: Icons.monitor_weight_outlined,
-            color: Colors.orange,
-          ),
-          const SizedBox(width: 10),
-          infoMiniCard(
-            title: "Allergies",
-            value: allergies,
-            icon: Icons.warning_amber_outlined,
-            color: Colors.redAccent,
-          ),
-        ],
-      ),
-    ],
-  ),
-),
                     buildSoftCard(
                       child: Column(
                         children: [
@@ -803,8 +816,7 @@ buildSoftCard(
                               const SizedBox(width: 10),
                               infoMiniCard(
                                 title: "Status",
-                                value: status[0].toUpperCase() +
-                                    status.substring(1),
+                                value: status[0].toUpperCase() + status.substring(1),
                                 icon: Icons.favorite_outline,
                                 color: patientStatusColor,
                               ),
@@ -843,69 +855,67 @@ buildSoftCard(
                     ),
 
                     const SizedBox(height: 16),
-                   
-          
 
-             if (medications.isNotEmpty)
-  buildSoftCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        sectionTitle("Medication Schedule", Icons.medication_outlined),
-        const SizedBox(height: 16),
+                    if (medications.isNotEmpty)
+                      buildSoftCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            sectionTitle("Medication Schedule", Icons.medication_outlined),
+                            const SizedBox(height: 16),
+                            ...medications.map((e) => buildMedicationCard(
+                                  Medication(
+                                    name: e["medicationName"] ?? "",
+                                    dosage: e["dosage"] ?? "",
+                                    frequency: e["repeat"] ?? "",
+                                    nextDose: e["reminderTime"] ?? "",
+                                    taken: e["taken"] ?? false,
+                                    sideEffects: (e["sideEffects"] is List)
+                                        ? (e["sideEffects"] as List).join(", ")
+                                        : "",
+                                  ),
+                                )),
+                          ],
+                        ),
+                      ),
 
-        ...medications.map((e) => buildMedicationCard(
-             Medication(
-  name: e["medicationName"] ?? "",
-  dosage: e["dosage"] ?? "",
-  frequency: e["repeat"] ?? "",
-  nextDose: e["reminderTime"] ?? "",
-  taken: e["taken"] ?? false,
-  sideEffects: (e["sideEffects"] is List)
-      ? (e["sideEffects"] as List).join(", ")
-      : "",
-),
-            )),
-      ],
-    ),
-  ),
-                    const SizedBox(height: 16),
-if (symptoms.isNotEmpty)
-  buildSoftCard(
-    child: Column(
-      children: [
-        sectionTitle("Symptoms Log", Icons.monitor_heart_outlined),
-        const SizedBox(height: 16),
-
-        ...symptoms.map((e) => buildSymptomCard(
-              Symptom(
-                date: e["date"] ?? "",
-                description: e["description"] ?? "",
-                severity: e["severity"] ?? "low",
-              ),
-            )),
-      ],
-    ),
-  ),
                     const SizedBox(height: 16),
 
-    if (emergencies.isNotEmpty)
-  buildSoftCard(
-    child: Column(
-      children: [
-        sectionTitle("Emergency History", Icons.warning_amber_rounded),
-        const SizedBox(height: 16),
+                    if (symptoms.isNotEmpty)
+                      buildSoftCard(
+                        child: Column(
+                          children: [
+                            sectionTitle("Symptoms Log", Icons.monitor_heart_outlined),
+                            const SizedBox(height: 16),
+                            ...symptoms.map((e) => buildSymptomCard(
+                                  Symptom(
+                                    date: e["date"] ?? "",
+                                    description: e["description"] ?? "",
+                                    severity: e["severity"] ?? "low",
+                                  ),
+                                )),
+                          ],
+                        ),
+                      ),
 
-        ...emergencies.map((e) => buildEmergencyCard(
-              Emergency(
-                date: e["date"] ?? "",
-                reason: e["reason"] ?? "",
-                resolved: e["resolved"] ?? false,
-              ),
-            )),
-      ],
-    ),
-  ),
+                    const SizedBox(height: 16),
+
+                    if (emergencies.isNotEmpty)
+                      buildSoftCard(
+                        child: Column(
+                          children: [
+                            sectionTitle("Emergency History", Icons.warning_amber_rounded),
+                            const SizedBox(height: 16),
+                            ...emergencies.map((e) => buildEmergencyCard(
+                                  Emergency(
+                                    date: e["date"] ?? "",
+                                    reason: e["reason"] ?? "",
+                                    resolved: e["resolved"] ?? false,
+                                  ),
+                                )),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),
