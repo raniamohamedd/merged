@@ -28,8 +28,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      
       backgroundColor: AppColors.whiteColor,
       body: Column(
+        
         children: [
           // 🔥 Skip Button
           Padding(
@@ -77,6 +79,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           // 🔥 Pages
           Expanded(
             child: PageView.builder(
+              physics: const BouncingScrollPhysics(),
               controller: _controller,
               onPageChanged: (index) {
                 setState(() => _currentPage = index);

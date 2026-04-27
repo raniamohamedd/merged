@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_2/Features/doctor_side/appointment/doctor_appoinment.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/shared/widgets/error_dialog.dart';
 import '../../../data/models/appiontment_model.dart';
 import '../../../shared/user_session.dart';
 
@@ -54,7 +55,7 @@ class HomeScreenD extends StatelessWidget {
           const SnackBar(content: Text("Appointment canceled & notification sent")),
         );
       } catch (e) {
-        debugPrint('❌ Error canceling appointment: $e');
+  showErrorDialog(context, message: e.toString());
       }
     }
 

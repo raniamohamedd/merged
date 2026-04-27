@@ -77,92 +77,95 @@ final refreshToken = tokenData["refreshToken"];
       isPatient ? "patient" : "doctor",
     );
   } catch (e) {
-    setState(() {
-      loading = false;
-    });
-
-    showErrorDialog(e.toString());
-  }
+  setState(() => loading = false);
+  showErrorDialog(e.toString());
 }
- void showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (_) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(.08),
-                  blurRadius: 30,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 75,
-                  height: 75,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.red.withOpacity(.1),
-                  ),
-                  child: const Icon(
-                    Icons.error_outline,
-                    size: 40,
-                    color: Colors.red,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  "Login Failed",
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  message.isEmpty ? "Something went wrong. Please try again." : message,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    fontSize: 14,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.blueColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    child: const Text("OK"),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+}
+void showErrorDialog(String message) {
+  String friendlyMessage = "Something went wrong. Please try again.";
+  
+  if (message.contains("password")) {
+    friendlyMessage = "Incorrect password. Please try again.";
+  } else if (message.contains("email") || message.contains("user")) {
+    friendlyMessage = "Email not found. Please check your email.";
+  } else if (message.contains("network") || message.contains("socket")) {
+    friendlyMessage = "No internet connection. Please check your network.";
+  } else if (message.contains("timeout")) {
+    friendlyMessage = "Request timed out. Please try again.";
   }
-
+  
+  showDialog(
+    context: context,
+    builder: (_) {
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.08),
+                blurRadius: 30,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 75,
+                height: 75,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.red.withOpacity(.1),
+                ),
+                child: const Icon(
+                  Icons.error_outline,
+                  size: 40,
+                  color: Colors.red,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                "Login Failed",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                friendlyMessage,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey.shade700,
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.blueColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Try Again"),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
   Widget buildRoleSelector() {
     return Container(
       decoration: BoxDecoration(

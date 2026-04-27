@@ -7,6 +7,7 @@ import 'package:flutter_application_2/Features/auth/widgets/signup_widgets/signu
 
 import 'package:flutter_application_2/core/services/api_service.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/shared/widgets/error_dialog.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
 import 'package:intl/intl.dart';
 
@@ -95,7 +96,7 @@ class _SignupViewState extends State<SignupViewdoc> {
   } catch (e) {
 
     // 👇 ده هيطبع الايرور
-    print("Signup Error: $e");
+  showErrorDialog(context, message: e.toString());
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Error: $e")),

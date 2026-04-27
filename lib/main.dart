@@ -12,6 +12,10 @@ final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+  };
 
   await FlutterDownloader.initialize(
     debug: true,
@@ -20,14 +24,14 @@ Future<void> main() async {
 
   await NotificationService.init(navKey: appNavigatorKey);
 
-  // ✅ TEST notification when app opens
-  await NotificationService.showScheduledNotification(
-    id: 1,
-    title: "App Started",
-    body: "Notification working correctly",
-    scheduledTime: tz.TZDateTime.now(tz.local)
-        .add(const Duration(seconds: 2)),
-  );
+  // // ✅ TEST notification when app opens
+  // await NotificationService.showScheduledNotification(
+  //   id: 1,
+  //   title: "App Started",
+  //   body: "Notification working correctly",
+  //   scheduledTime: tz.TZDateTime.now(tz.local)
+  //       .add(const Duration(seconds: 2)),
+  // );
 
   final prefs = await SharedPreferences.getInstance();
   bool isLoggedIn = prefs.getBool("isLoggedIn") ?? false;

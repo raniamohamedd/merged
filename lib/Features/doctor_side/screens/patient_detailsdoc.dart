@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chat_details_screen.dart' hide AppColors;
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
+import 'package:flutter_application_2/shared/widgets/error_dialog.dart';
 
 class Medication {
   final String name, dosage, frequency, nextDose, sideEffects;
@@ -85,7 +86,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
         patientData = response["data"];
       });
     } catch (e) {
-      print(e);
+  showErrorDialog(context, message: e.toString());
     }
   }
 
@@ -593,20 +594,53 @@ final conditions =
                       ),
                     ),
                     const SizedBox(width: 4),
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(.18),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: const Icon(
-                        Icons.person_outline_rounded,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
+                   // في الـ build دور على الكونتينر ده وعدّله
+Container(
+  width: 56,
+  height: 56,
+  decoration: BoxDecoration(
+    borderRadius: BorderRadius.circular(18),
+    border: Border.all(
+      color: Colors.white.withOpacity(.3),
+      width: 2,
+    ),
+  ),
+  child: ClipRRect(
+    borderRadius: BorderRadius.circular(16),
+    child: () {
+      final userImage = user?['image'];
+      String? imageUrl;
+      if (userImage is Map) {
+        imageUrl = userImage['secure_url']?.toString();
+      } else if (userImage is String && userImage.isNotEmpty) {
+        imageUrl = userImage;
+      }
+
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        return Image.network(
+          imageUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            color: Colors.white.withOpacity(.18),
+            child: const Icon(
+              Icons.person_outline_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
+        );
+      }
+      return Container(
+        color: Colors.white.withOpacity(.18),
+        child: const Icon(
+          Icons.person_outline_rounded,
+          color: Colors.white,
+          size: 28,
+        ),
+      );
+    }(),
+  ),
+),  const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

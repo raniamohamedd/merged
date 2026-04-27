@@ -5,6 +5,7 @@ import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/cha
 import 'package:flutter_application_2/Features/patient_side/profile/view/profile_view.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
+import 'package:flutter_application_2/shared/widgets/error_dialog.dart';
 
 class DoctorChat {
   final String name;
@@ -63,7 +64,7 @@ Future<void> loadDoctors() async {
     });
 
   } catch (e) {
-    debugPrint("Doctors error: $e");
+  showErrorDialog(context, message: e.toString());
   }
 }
 

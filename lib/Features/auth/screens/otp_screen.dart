@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/auth/screens/login_view.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
+import 'package:flutter_application_2/shared/widgets/error_dialog.dart';
 
 class OtpScreen extends StatefulWidget {
   final String email;
@@ -40,7 +41,7 @@ class _OtpScreenState extends State<OtpScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Invalid OTP")),
     );
-    print(e);
+  showErrorDialog(context, message: e.toString());
   }
 }
   @override

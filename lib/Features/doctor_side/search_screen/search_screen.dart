@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chat_details_screen.dart' hide AppColors;
 import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/shared/widgets/error_dialog.dart';
 
 class SearchScreenD extends StatefulWidget {
   const SearchScreenD({super.key});
@@ -38,7 +39,7 @@ class _SearchScreenState extends State<SearchScreenD> {
         });
       }
     } catch (e) {
-      debugPrint('Failed to load search history: $e');
+  showErrorDialog(context, message: e.toString());
     }
   }
 

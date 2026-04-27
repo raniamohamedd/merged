@@ -2,17 +2,17 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chat_details_screen.dart'
     hide AppColors;
+import 'package:flutter_application_2/Features/doctor_side/screens/patient_detailsdoc.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
-// ─── Model ─────────────────────────────────────────────────────────────────
 class PatientChatItem {
-  final String userId;           // user _id → للـ socket
+  final String userId;
   final String patientProfileId;
   final String name;
-  final String? imageUrl;        // صورة Cloudinary الحقيقية
+  final String? imageUrl;
   String lastMessage;
   String lastMessageTime;
   int unreadCount;
@@ -28,7 +28,6 @@ class PatientChatItem {
   });
 }
 
-// ─── Screen ────────────────────────────────────────────────────────────────
 class ChatsListScreenDoctor extends StatefulWidget {
   const ChatsListScreenDoctor({super.key});
 
@@ -49,7 +48,6 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
 
   int get unreadTotal => patients.fold(0, (s, p) => s + p.unreadCount);
 
-  // ─── تحميل المرضى من API ─────────────────────────────────────────────────
   Future<void> loadPatients() async {
     try {
       final response = await ApiService.getPatients();
@@ -58,11 +56,9 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
       final List<PatientChatItem> loaded = data.map<PatientChatItem>((e) {
         final user = e['userId'] ?? {};
 
-        // ── استخرج صورة المريض الحقيقية ──
         String? imageUrl;
         final imgField = user['image'];
         if (imgField is Map) {
-          // {"secure_url": "...", "public_id": "..."}
           imageUrl = imgField['secure_url']?.toString();
         } else if (imgField is String && imgField.isNotEmpty) {
           imageUrl = imgField;
@@ -88,7 +84,6 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
     }
   }
 
-  // ─── جلب آخر رسالة عبر Socket ────────────────────────────────────────────
   Future<void> _fetchLastMessages(List<PatientChatItem> items) async {
     if (items.isEmpty) return;
 
@@ -118,7 +113,6 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
       }
     });
 
-    // آخر رسالة من تاريخ المحادثة
     _previewSocket!.on('chatHistory', (data) {
       if (!mounted) return;
       final msgs = (data['messages'] as List?) ?? [];
@@ -142,7 +136,6 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
       }
     });
 
-    // رسائل جديدة real-time
     _previewSocket!.on('newMessage', (data) {
       if (!mounted) return;
       final senderId = data['senderId']?.toString() ?? '';
@@ -194,45 +187,84 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
     super.dispose();
   }
 
-  // ─── Avatar: صورة حقيقية أو initials ─────────────────────────────────────
-  Widget _buildAvatar(PatientChatItem patient) {
+  // ─── Avatar ───────────────────────────────────────────────────────────────
+  Widget _buildInitialsAvatar(String name) {
+    return Container(
+      color: AppColors.blueColor.withOpacity(.12),
+      child: Center(
+        child: Text(
+          _getInitials(name),
+          style: TextStyle(
+            color: AppColors.blueColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget buildAvatar(PatientChatItem patient) {
     final hasImage =
         patient.imageUrl != null && patient.imageUrl!.isNotEmpty;
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        CircleAvatar(
-          radius: 28,
-          backgroundColor: AppColors.blueColor.withOpacity(.12),
-          backgroundImage:
-              hasImage ? NetworkImage(patient.imageUrl!) : null,
-          onBackgroundImageError: hasImage ? (_, __) {} : null,
-          child: !hasImage
-              ? Text(
-                  _getInitials(patient.name),
-                  style: TextStyle(
-                    color: AppColors.blueColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                )
-              : null,
-        ),
-        Positioned(
-          bottom: -1,
-          right: -1,
-          child: Container(
-            width: 14,
-            height: 14,
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PatientDetailsPage(patientId: patient.userId),
+          ),
+        );
+      },
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
             decoration: BoxDecoration(
-              color: Colors.green,
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
+              border: Border.all(
+                color: AppColors.blueColor.withOpacity(.2),
+                width: 2,
+              ),
+            ),
+            child: ClipOval(
+              child: hasImage
+                  ? Image.network(
+                      patient.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          _buildInitialsAvatar(patient.name),
+                      loadingBuilder: (_, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.blueColor,
+                          ),
+                        );
+                      },
+                    )
+                  : _buildInitialsAvatar(patient.name),
             ),
           ),
-        ),
-      ],
+          Positioned(
+            bottom: -1,
+            right: -1,
+            child: Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                color: Colors.green,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -287,7 +319,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
             ),
             child: Row(
               children: [
-                _buildAvatar(patient),
+                buildAvatar(patient),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -506,10 +538,8 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color:
-                                      AppColors.blueColor.withOpacity(.12),
-                                  borderRadius:
-                                      BorderRadius.circular(10),
+                                  color: AppColors.blueColor.withOpacity(.12),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
                                   '${filteredPatients.length}',
@@ -559,8 +589,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
                             ListView.builder(
                               itemCount: filteredPatients.length,
                               shrinkWrap: true,
-                              physics:
-                                  const NeverScrollableScrollPhysics(),
+                              physics: const NeverScrollableScrollPhysics(),
                               itemBuilder: (_, i) =>
                                   _buildChatTile(filteredPatients[i]),
                             ),

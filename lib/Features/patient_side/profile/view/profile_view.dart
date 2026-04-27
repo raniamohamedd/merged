@@ -7,6 +7,7 @@ import 'package:flutter_application_2/Features/patient_side/profile/view/alertTo
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
 import 'package:flutter_application_2/shared/user_session.dart';
+import 'package:flutter_application_2/shared/widgets/error_dialog.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image/image.dart' as img;
@@ -63,7 +64,7 @@ Future<void> loadDoctors() async {
     });
 
   } catch (e) {
-    debugPrint("Doctors error: $e");
+  showErrorDialog(context, message: e.toString());
   }
 }
    List<DoctorContact> doctors = [];
@@ -141,7 +142,7 @@ Future<void> loadProfile() async {
     // });
 
   } catch (e) {
-    debugPrint("Profile error: $e");
+  showErrorDialog(context, message: e.toString());
   }
 }
   Future<void> pickAndUploadImage() async {
@@ -239,7 +240,7 @@ Future<void> handleSave() async {
       await pickAndUploadImage();
     }
   } catch (e) {
-    debugPrint("Error: $e");
+  showErrorDialog(context, message: e.toString());
     _showTopMessage("Error saving profile ❌");
   }
 } String getInitials(String name) {

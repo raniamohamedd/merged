@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
+import 'package:flutter_application_2/shared/widgets/error_dialog.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -46,7 +47,7 @@ class _SettingsPageState extends State<SettingsPage> {
       });
     } catch (e) {
       setState(() => isLoading = false);
-      debugPrint('Error loading doctor profile: $e');
+  showErrorDialog(context, message: e.toString());
     }
   }
 

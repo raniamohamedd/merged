@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/data/models/appiontment_model.dart';
 import 'package:flutter_application_2/shared/user_session.dart';
+import 'package:flutter_application_2/shared/widgets/error_dialog.dart';
 
 class Upcoming extends StatelessWidget {
   const Upcoming({super.key});
@@ -65,7 +66,7 @@ class Upcoming extends StatelessWidget {
           const SnackBar(content: Text("Appointment done & notification sent")),
         );
       } catch (e) {
-        debugPrint('❌ Error completing appointment: $e');
+  showErrorDialog(context, message: e.toString());
       }
     }
 

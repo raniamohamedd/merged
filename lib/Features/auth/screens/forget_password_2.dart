@@ -4,6 +4,7 @@ import 'package:flutter_application_2/Features/auth/widgets/forgot_password_widg
 
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
+import 'package:flutter_application_2/shared/widgets/error_dialog.dart';
 
 class ForgotpasswordView2 extends StatefulWidget {
   
@@ -47,13 +48,9 @@ class _ForgotpasswordViewState extends State<ForgotpasswordView2> {
         ),
       );
 
-    } catch (e) {
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
-
-    }
+    }catch (e) {
+  showErrorDialog(context, message: e.toString());
+}
 
     if (!mounted) return;
 
