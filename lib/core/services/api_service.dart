@@ -440,7 +440,7 @@ static Future<void> acceptRequest(String id) async {
       "Authorization": "System $token",
     },
   );
-
+print(response.body);
   if (response.statusCode != 200 && response.statusCode != 201) {
     throw Exception("Failed to accept request");
   }
