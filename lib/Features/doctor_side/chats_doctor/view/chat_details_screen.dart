@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/core/routing/call_screen.dart';
 import 'package:flutter_application_2/core/services/socket_service.dart';
 import 'package:flutter_application_2/Features/doctor_side/screens/patient_detailsdoc.dart';
 import 'package:image_picker/image_picker.dart';
@@ -271,6 +272,55 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
     });
 
     chatService.getHistory(receiverId);
+
+    // ── incoming call ──────────────────────────────────────────────────────
+    chatService.onIncomingCall((data) {
+      if (!mounted) return;
+      _showIncomingCallDialog(data);
+    });
+  }
+
+  void _showIncomingCallDialog(dynamic data) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Incoming Call'),
+        // content: Text('\${data['callerName'] ?? 'Patient'} is calling...'),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.call_end, color: Colors.red),
+            label: const Text('Reject', style: TextStyle(color: Colors.red)),
+            onPressed: () {
+              chatService.rejectCall(callerId: data['callerId']?.toString() ?? '');
+              Navigator.pop(context);
+            },
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            icon: const Icon(Icons.call, color: Colors.white),
+            label: const Text('Accept', style: TextStyle(color: Colors.white)),
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CallScreen(
+                    callerName: data['callerName'] ?? widget.doctorName,
+                    receiverId: data['callerId']?.toString() ?? '',
+                    isIncoming: true,
+                    socketService: chatService,
+                    callId: data['callId']?.toString(),
+                    incomingCallData: data,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -507,9 +557,18 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
     }
   }
 
-  Future<void> _makePhoneCall() async {
-    final Uri phoneUri = Uri(scheme: 'tel', path: '+201000000000');
-    if (await canLaunchUrl(phoneUri)) await launchUrl(phoneUri);
+  void _initiateCall() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CallScreen(
+          callerName: widget.doctorName,
+          receiverId: receiverId,
+          isIncoming: false,
+          socketService: chatService,
+        ),
+      ),
+    );
   }
 
   void _showSnack(String msg) {
@@ -677,7 +736,7 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
             ),
           ),
           IconButton(
-            onPressed: _makePhoneCall,
+            onPressed: _initiateCall,
             icon: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
