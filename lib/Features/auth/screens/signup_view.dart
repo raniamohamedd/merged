@@ -181,7 +181,7 @@ Future<void> handleSignUp() async {
         password: passwordController.text.trim(),
         confirmPassword: confirmPasswordController.text.trim(),
         gender: gender.toLowerCase(),
-        role: "Patient", // ⚠️ كان عندك غلط: Patiant
+        role: "Patiant", // ⚠️ كان عندك غلط: Patiant
         dob: dobController.text.trim(),
         phone: phoneController.text.trim(),
       );

@@ -16,9 +16,9 @@ class SocketService {
     socket = IO.io(
       "$url/chat",
       IO.OptionBuilder()
-          .setTransports(['polling', 'websocket']) // ← polling أول زي HTML Tester
+          .setTransports(['polling', 'websocket'])
           .setExtraHeaders({'authorization': token})
-          .setAuth({'token': token})              // ← بيبعت التوكن في auth كمان
+          .setAuth({'token': token})
           .disableAutoConnect()
           .build(),
     );
@@ -47,8 +47,8 @@ class SocketService {
   }
 
   void disconnect() {
-    socket?.disconnect();
-    socket = null;
+    // socket?.disconnect();
+    // socket = null;
   }
 
   // =========================
@@ -151,13 +151,13 @@ class SocketService {
   }
 
   // =========================
-  // 📞 CALL — INITIATE
+  // 📞 CALL EVENTS — EMIT
   // =========================
 
-  /// يبعت طلب كول للطرف الثاني
+  /// ابعت طلب مكالمة للطرف الثاني
   void initiateCall({
     required String receiverId,
-    String callType = 'audio', // 'audio' or 'video'
+    String callType = 'voice',
   }) {
     socket?.emit('initiateCall', {
       'receiverId': receiverId,
@@ -166,46 +166,112 @@ class SocketService {
     print("📞 initiateCall → $receiverId ($callType)");
   }
 
-  /// يقبل الكول الوارد
-  void acceptCall({required String callerId}) {
-    socket?.emit('acceptCall', {'callerId': callerId});
-    print("✅ acceptCall ← $callerId");
+  /// ابعت WebRTC Offer
+  void sendWebrtcOffer({
+    required String receiverId,
+    required Map<String, dynamic> offer,
+    String? callId,
+  }) {
+    socket?.emit('webrtcOffer', {
+      'receiverId': receiverId,
+      'offer': offer,
+      if (callId != null) 'callId': callId,
+    });
+    print("🔗 webrtcOffer → $receiverId");
   }
 
-  /// يرفض الكول الوارد
+  /// ابعت WebRTC Answer
+  void sendWebrtcAnswer({
+    required String receiverId,
+    required Map<String, dynamic> answer,
+    String? callId,
+  }) {
+    socket?.emit('webrtcAnswer', {
+      'receiverId': receiverId,
+      'answer': answer,
+      if (callId != null) 'callId': callId,
+    });
+    print("🔗 webrtcAnswer → $receiverId");
+  }
+
+  /// ابعت ICE Candidate
+  void sendIceCandidate({
+    required String receiverId,
+    required Map<String, dynamic> candidate,
+  }) {
+    socket?.emit('iceCandidate', {
+      'receiverId': receiverId,
+      'candidate': candidate,
+    });
+    print("🧊 iceCandidate → $receiverId");
+  }
+
+  /// رفض مكالمة واردة
   void rejectCall({required String callerId}) {
     socket?.emit('rejectCall', {'callerId': callerId});
     print("❌ rejectCall ← $callerId");
   }
 
-  /// ينهي الكول الحالي
-  void endCall({required String receiverId}) {
-    socket?.emit('endCall', {'receiverId': receiverId});
+  /// إنهاء المكالمة الحالية
+  void endCall({required String receiverId, String? callId, int? duration}) {
+    socket?.emit('endCall', {
+      'receiverId': receiverId,
+      if (callId != null) 'callId': callId,
+      if (duration != null) 'duration': duration,
+    });
     print("📴 endCall → $receiverId");
   }
 
   // =========================
-  // 📡 CALL EVENTS — LISTENERS
+  // 📡 CALL EVENTS — LISTEN
   // =========================
 
   /// كول وارد جديد
   void onIncomingCall(Function(dynamic) callback) {
+    socket?.off('incomingCall'); // avoid duplicates
     socket?.on("incomingCall", callback);
   }
 
-  /// الطرف الثاني قبل الكول
-  void onCallAccepted(Function(dynamic) callback) {
-    socket?.on("callAccepted", callback);
+  /// السيرفر أكد بدء المكالمة (بعد initiateCall)
+  void onCallInitiated(Function(dynamic) callback) {
+    socket?.off('callInitiated');
+    socket?.on("callInitiated", callback);
   }
 
-  /// الطرف الثاني رفض الكول
+  /// وصل webrtcOffer من الطرف الثاني
+  void onWebrtcOffer(Function(dynamic) callback) {
+    socket?.off('webrtcOffer');
+    socket?.on("webrtcOffer", callback);
+  }
+
+  /// وصل webrtcAnswer من الطرف الثاني
+  void onWebrtcAnswer(Function(dynamic) callback) {
+    socket?.off('webrtcAnswer');
+    socket?.on("webrtcAnswer", callback);
+  }
+
+  /// وصل ICE candidate
+  void onIceCandidate(Function(dynamic) callback) {
+    socket?.off('iceCandidate');
+    socket?.on("iceCandidate", callback);
+  }
+
+  /// الطرف الثاني رفض المكالمة
   void onCallRejected(Function(dynamic) callback) {
+    socket?.off('callRejected');
     socket?.on("callRejected", callback);
   }
 
-  /// الكول انتهى (من أي طرف)
+  /// المكالمة انتهت (من أي طرف)
   void onCallEnded(Function(dynamic) callback) {
+    socket?.off('callEnded');
     socket?.on("callEnded", callback);
+  }
+
+  /// الطرف الثاني قبل المكالمة
+  void onCallAccepted(Function(dynamic) callback) {
+    socket?.off('callAccepted');
+    socket?.on("callAccepted", callback);
   }
 
   // =========================

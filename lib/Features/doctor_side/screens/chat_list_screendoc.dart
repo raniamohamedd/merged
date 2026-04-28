@@ -246,7 +246,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
 
   @override
   void dispose() {
-    _previewSocket?.disconnect();
+    // _previewSocket?.disconnect();
     _searchController.dispose();
     super.dispose();
   }

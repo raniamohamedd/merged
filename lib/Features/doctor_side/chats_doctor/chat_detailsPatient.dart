@@ -292,7 +292,7 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
 
   @override
   void dispose() {
-    chatService.disconnect();
+    // chatService.disconnect();
     _scrollController.dispose();
     _audioPlayer.dispose();
     _audioRecorder.dispose();
