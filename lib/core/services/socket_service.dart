@@ -16,8 +16,9 @@ class SocketService {
     socket = IO.io(
       "$url/chat",
       IO.OptionBuilder()
-          .setTransports(['websocket'])
+          .setTransports(['polling', 'websocket']) // ← polling أول زي HTML Tester
           .setExtraHeaders({'authorization': token})
+          .setAuth({'token': token})              // ← بيبعت التوكن في auth كمان
           .disableAutoConnect()
           .build(),
     );
@@ -28,8 +29,20 @@ class SocketService {
       print("✅ Connected: ${socket!.id}");
     });
 
-    socket!.onDisconnect((_) {
-      print("❌ Disconnected");
+    socket!.onDisconnect((reason) {
+      print("❌ Disconnected — reason: $reason");
+    });
+
+    socket!.onConnectError((err) {
+      print("⚠️ Connect Error: $err");
+    });
+
+    socket!.on('connect_error', (err) {
+      print("⚠️ connect_error event: $err");
+    });
+
+    socket!.on('error', (err) {
+      print("🔴 Socket error: $err");
     });
   }
 
@@ -46,12 +59,13 @@ class SocketService {
       callback(data);
     });
   }
-void onHistory(Function(dynamic) callback) {
-  socket?.on("chatHistory", (data) {
-    print("📜 CHAT HISTORY RAW RESPONSE: $data"); // 👈 هنا الطباعة
-    callback(data);
-  });
-}
+
+  void onHistory(Function(dynamic) callback) {
+    socket?.on("chatHistory", (data) {
+      print("📜 CHAT HISTORY RAW RESPONSE: $data");
+      callback(data);
+    });
+  }
 
   void sendMessage({
     required String receiverId,
@@ -137,18 +151,61 @@ void onHistory(Function(dynamic) callback) {
   }
 
   // =========================
-  // 📡 CALL EVENTS (optional hooks)
+  // 📞 CALL — INITIATE
   // =========================
+
+  /// يبعت طلب كول للطرف الثاني
+  void initiateCall({
+    required String receiverId,
+    String callType = 'audio', // 'audio' or 'video'
+  }) {
+    socket?.emit('initiateCall', {
+      'receiverId': receiverId,
+      'callType': callType,
+    });
+    print("📞 initiateCall → $receiverId ($callType)");
+  }
+
+  /// يقبل الكول الوارد
+  void acceptCall({required String callerId}) {
+    socket?.emit('acceptCall', {'callerId': callerId});
+    print("✅ acceptCall ← $callerId");
+  }
+
+  /// يرفض الكول الوارد
+  void rejectCall({required String callerId}) {
+    socket?.emit('rejectCall', {'callerId': callerId});
+    print("❌ rejectCall ← $callerId");
+  }
+
+  /// ينهي الكول الحالي
+  void endCall({required String receiverId}) {
+    socket?.emit('endCall', {'receiverId': receiverId});
+    print("📴 endCall → $receiverId");
+  }
+
+  // =========================
+  // 📡 CALL EVENTS — LISTENERS
+  // =========================
+
+  /// كول وارد جديد
   void onIncomingCall(Function(dynamic) callback) {
     socket?.on("incomingCall", callback);
   }
 
-  void onCallEnded(Function(dynamic) callback) {
-    socket?.on("callEnded", callback);
+  /// الطرف الثاني قبل الكول
+  void onCallAccepted(Function(dynamic) callback) {
+    socket?.on("callAccepted", callback);
   }
 
+  /// الطرف الثاني رفض الكول
   void onCallRejected(Function(dynamic) callback) {
     socket?.on("callRejected", callback);
+  }
+
+  /// الكول انتهى (من أي طرف)
+  void onCallEnded(Function(dynamic) callback) {
+    socket?.on("callEnded", callback);
   }
 
   // =========================

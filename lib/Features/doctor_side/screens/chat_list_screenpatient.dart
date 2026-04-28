@@ -1,34 +1,37 @@
+
+
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/doctor_side/chats_doctor/chat_detailsPatient.dart' hide AppColors;
-import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chat_details_screen.dart' hide AppColors;
-import 'package:flutter_application_2/Features/patient_side/profile/view/profile_view.dart';
+import 'package:flutter_application_2/Features/patient_side/chats/view/chat_details_screen.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
-import 'package:flutter_application_2/shared/widgets/error_dialog.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 
-class DoctorChat {
+// ─── Model ────────────────────────────────────────────────────────────────────
+class DoctorChatItem {
+  final String userId;
   final String name;
-  final String lastMessage;
-  final String time;
-  final String image;
-  final int unreadCount;
-  final bool isOnline;
-  final String chatId;
+  final String specialty;
+  final String? imageUrl;
+  String lastMessage;
+  String lastMessageTime;
+  int unreadCount;
 
-  DoctorChat({
+  DoctorChatItem({
+    required this.userId,
     required this.name,
-    required this.lastMessage,
-    required this.time,
-    required this.image,
-    required this.unreadCount,
-    required this.isOnline,
-    required this.chatId,
+    required this.specialty,
+    this.imageUrl,
+    this.lastMessage = '',
+    this.lastMessageTime = '',
+    this.unreadCount = 0,
   });
 }
 
- 
-
+// ─── Screen ───────────────────────────────────────────────────────────────────
 class ChatsListScreenPatient extends StatefulWidget {
   const ChatsListScreenPatient({super.key});
 
@@ -38,140 +41,184 @@ class ChatsListScreenPatient extends StatefulWidget {
 
 class _ChatsListScreenPatientState extends State<ChatsListScreenPatient> {
   final TextEditingController _searchController = TextEditingController();
-  String searchQuery = "";
-List<DoctorContact> get filteredDoctors {
-  return doctors.where((d) {
-    return d.name.toLowerCase().contains(searchQuery.toLowerCase());
-  }).toList();
-}
-int get unreadChatsCount => doctors.length;
-   List<DoctorContact> doctors = [];
+  String searchQuery = '';
+  List<DoctorChatItem> doctors = [];
+  bool isLoading = true;
+  IO.Socket? _previewSocket;
+  String _myUserId = '';
 
-Future<void> loadDoctors() async {
-  try {
-    final data = await ApiService.getmydoctors(); // بيرجع list
+  List<DoctorChatItem> get filteredDoctors => doctors
+      .where((d) => d.name.toLowerCase().contains(searchQuery.toLowerCase()))
+      .toList();
 
-    setState(() {
-      doctors = data.map<DoctorContact>((doc) {
-        return DoctorContact(
-                   id: doc['userId']?['_id'] ?? 'Unknown',
+  int get unreadTotal => doctors.fold(0, (s, d) => s + d.unreadCount);
 
-          name: doc['userId']?['fullName'] ?? 'Unknown',
-          specialty: doc['specialization'] ?? 'Doctor',
-          phone: doc['userId']?['phone'] ?? '',
-        );
-      }).toList();
-    });
-
-  } catch (e) {
-  showErrorDialog(context, message: e.toString());
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(
+        () => setState(() => searchQuery = _searchController.text));
+    _loadMyId();
+    loadDoctors();
   }
-}
 
-@override
-void initState() {
-  super.initState();
-
-  loadDoctors(); // 🔥 دي أهم سطر
-
-}
   @override
   void dispose() {
+    _previewSocket?.disconnect();
     _searchController.dispose();
     super.dispose();
   }
 
-  Widget buildTopCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.blueColor,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.blueColor.withOpacity(.18),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(.18),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: const Icon(
-              Icons.chat_bubble_outline_rounded,
-              color: Colors.white,
-              size: 28,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Chats",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "$unreadChatsCount unread conversations",
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  Future<void> _loadMyId() async {
+    final prefs = await SharedPreferences.getInstance();
+    _myUserId = prefs.getString('userId') ?? '';
   }
 
-  Widget buildSearchBox() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFF0F2F5)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.03),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: _searchController,
-        onChanged: (value) {
-          setState(() {
-            searchQuery = value;
+  // ── Load doctors ──────────────────────────────────────────────────────────
+  Future<void> loadDoctors() async {
+    try {
+      final data = await ApiService.getmydoctors();
+
+      final List<DoctorChatItem> loaded = (data as List).map<DoctorChatItem>((doc) {
+        String? imageUrl;
+        final imgField = doc['userId']?['image'];
+        if (imgField is Map) {
+          imageUrl = imgField['secure_url']?.toString();
+        } else if (imgField is String && imgField.isNotEmpty) {
+          imageUrl = imgField;
+        }
+
+        return DoctorChatItem(
+                             userId: doc['userId']?['_id'] ?? 'Unknown',
+
+          name: doc['userId']?['fullName']?.toString() ?? 'Unknown',
+          specialty: doc['specialization']?.toString() ?? 'Doctor',
+          imageUrl: imageUrl,
+        );
+      }).toList();
+
+      setState(() {
+        doctors = loaded;
+        isLoading = false;
+      });
+
+      _fetchLastMessages(loaded);
+    } catch (e) {
+      debugPrint('LOAD ERROR: $e');
+      setState(() => isLoading = false);
+    }
+  }
+
+  // ── Fetch last messages via socket ────────────────────────────────────────
+  Future<void> _fetchLastMessages(List<DoctorChatItem> items) async {
+    if (items.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('accessToken') ?? '';
+
+    _previewSocket = IO.io(
+      'https://medpal-production-e325.up.railway.app/chat',
+      IO.OptionBuilder()
+          .setTransports(['websocket', 'polling'])
+          .setExtraHeaders({'authorization': 'System $token'})
+          .disableAutoConnect()
+          .build(),
+    );
+
+    _previewSocket!.connect();
+
+    _previewSocket!.onConnect((_) {
+      for (final d in items) {
+        if (d.userId.isNotEmpty) {
+          _previewSocket!.emit('getHistory', {
+            'withUserId': d.userId,
+            'page': 1,
+            'limit': 1000000,
           });
-        },
-        decoration: InputDecoration(
-          hintText: "Search chats...",
-          hintStyle: TextStyle(color: Colors.grey.shade500),
-          prefixIcon: Icon(CupertinoIcons.search, color: AppColors.blueColor),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 18),
-        ),
-      ),
-    );
+        }
+      }
+    });
+
+    _previewSocket!.on('chatHistory', (data) {
+      if (!mounted) return;
+      final msgs = (data['messages'] as List?) ?? [];
+      if (msgs.isEmpty) return;
+
+      final lastMsg = msgs.first;
+      final senderId = lastMsg['senderId']?.toString() ?? '';
+      final receiverId = lastMsg['receiverId']?.toString() ?? '';
+      final attachment = lastMsg['attachment'];
+      String text = lastMsg['message']?.toString() ?? '';
+      if (text.isEmpty && attachment != null) {
+        final mime = (attachment['mimeType'] ?? '').toString().toLowerCase();
+        if (mime.startsWith('image/')) text = '📷 Photo';
+        else if (mime.startsWith('audio/')) text = '🎤 Voice message';
+        else text = '📎 File';
+      }
+      final createdAt = lastMsg['createdAt']?.toString() ?? '';
+
+      final idx = doctors.indexWhere(
+          (d) => d.userId == senderId || d.userId == receiverId);
+      if (idx != -1 && mounted) {
+        setState(() {
+          doctors[idx].lastMessage = text.isEmpty ? 'Tap to start chatting...' : text;
+          doctors[idx].lastMessageTime = _formatTime(createdAt);
+        });
+      }
+    });
+
+    _previewSocket!.on('newMessage', (data) {
+      if (!mounted) return;
+      final senderId = data['senderId']?.toString() ?? '';
+      final receiverId = data['receiverId']?.toString() ?? '';
+      final attachment = data['attachment'];
+      String text = data['message']?.toString() ?? '';
+      if (text.isEmpty && attachment != null) {
+        final mime = (attachment['mimeType'] ?? '').toString().toLowerCase();
+        if (mime.startsWith('image/')) text = '📷 Photo';
+        else if (mime.startsWith('audio/')) text = '🎤 Voice message';
+        else text = '📎 File';
+      }
+      final createdAt = data['createdAt']?.toString() ?? '';
+
+      final idx = doctors.indexWhere(
+          (d) => d.userId == senderId || d.userId == receiverId);
+      if (idx != -1 && mounted) {
+        setState(() {
+          doctors[idx].lastMessage = text.isEmpty ? '📎 Media' : text;
+          doctors[idx].lastMessageTime = _formatTime(createdAt);
+          if (senderId != _myUserId) doctors[idx].unreadCount += 1;
+          final item = doctors.removeAt(idx);
+          doctors.insert(0, item);
+        });
+      }
+    });
   }
 
+  String _formatTime(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final now = DateTime.now();
+      if (dt.day == now.day && dt.month == now.month && dt.year == now.year) {
+        return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      } else if (now.difference(dt).inDays == 1) {
+        return 'Yesterday';
+      } else {
+        return '${dt.day}/${dt.month}';
+      }
+    } catch (_) {
+      return '';
+    }
+  }
+
+  String _getInitials(String name) {
+    final parts = name.trim().split(' ');
+    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    return name.isNotEmpty ? name[0].toUpperCase() : '?';
+  }
+
+  // ── BUILD ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -179,234 +226,375 @@ void initState() {
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 40, 16, 0),
-              child: buildTopCard(),
-            ),
+            _buildTopCard(),
             const SizedBox(height: 12),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    buildSearchBox(),
-                    const SizedBox(height: 18),
-                    Text(
-                      "Messages",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        color: AppColors.blueColor,
+              child: isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                          color: AppColors.blueColor))
+                  : RefreshIndicator(
+                      color: AppColors.blueColor,
+                      onRefresh: () async {
+                        setState(() => isLoading = true);
+                        await loadDoctors();
+                      },
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSearchBox(),
+                            const SizedBox(height: 18),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Messages',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    color: AppColors.blueColor,
+                                  ),
+                                ),
+                                if (unreadTotal > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.blueColor,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      '$unreadTotal unread',
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            filteredDoctors.isEmpty
+                                ? Center(
+                                    child: Padding(
+                                      padding:
+                                          const EdgeInsets.only(top: 60),
+                                      child: Column(
+                                        children: [
+                                          Icon(Icons.chat_bubble_outline,
+                                              size: 56,
+                                              color: Colors.grey.shade300),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            searchQuery.isNotEmpty
+                                                ? 'No results for "$searchQuery"'
+                                                : 'No doctors yet',
+                                            style: TextStyle(
+                                                color: Colors.grey.shade500,
+                                                fontSize: 15),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                : ListView.separated(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    itemCount: filteredDoctors.length,
+                                    separatorBuilder: (_, __) =>
+                                        const SizedBox(height: 10),
+                                    itemBuilder: (context, index) {
+                                      final doctor = filteredDoctors[index];
+                                      return _buildChatTile(doctor);
+                                    },
+                                  ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    filteredDoctors.isEmpty
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 40),
-                              child: Text(
-                                "No chats found",
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          )
-                        : ListView.builder(
-                            itemCount: filteredDoctors.length,
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemBuilder: (context, index) {
-                              final doctor = filteredDoctors[index];
-
-                             return ChatTile(
-  name: doctor.name,
-  lastMessage: "Start chatting...", // placeholder
-  time: "",
-  image: "lib/images/default_avatar.png", // fallback image
-  unreadCount: 0,
-  isOnline: true,onTap: () {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => ChatsPagePatient(
-        doctorName: doctor.name,
-        chatId: doctor.id, // 🔥 use API id
-      ),
-    ),
-  );
-},
-                              );
-                            },
-                          ),
-                  ],
-                ),
-              ),
             ),
           ],
         ),
       ),
     );
   }
-}
 
-class ChatTile extends StatelessWidget {
-  final String name;
-  final String lastMessage;
-  final String time;
-  final String image;
-  final int unreadCount;
-  final bool isOnline;
-  final VoidCallback onTap;
-
-  const ChatTile({
-    super.key,
-    required this.name,
-    required this.lastMessage,
-    required this.time,
-    required this.image,
-    required this.unreadCount,
-    required this.isOnline,
-    required this.onTap,
-  });
-
-  String getInitials(String text) {
-    final parts = text.trim().split(" ");
-    if (parts.length == 1) {
-      return parts.first.isNotEmpty ? parts.first[0].toUpperCase() : "C";
-    }
-    return "${parts.first[0]}${parts.last[0]}".toUpperCase();
+  // ── TOP CARD ──────────────────────────────────────────────────────────────
+  Widget _buildTopCard() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1565C0), Color(0xFF1976D2), Color(0xFF42A5F5)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.blueColor.withOpacity(.3),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          )
+        ],
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.chat_rounded, color: Colors.white, size: 28),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'My Doctors',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '${doctors.length} doctor${doctors.length == 1 ? '' : 's'}',
+                style: const TextStyle(
+                    color: Colors.white70, fontSize: 12),
+              ),
+            ],
+          ),
+          const Spacer(),
+          if (unreadTotal > 0)
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '$unreadTotal new',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
+  // ── SEARCH BOX ────────────────────────────────────────────────────────────
+  Widget _buildSearchBox() {
+    return Container(
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(22),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: const Color(0xFFF0F2F5)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(.03),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          )
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Search doctors...',
+          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+          prefixIcon:
+              Icon(CupertinoIcons.search, color: AppColors.blueColor),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  // ── CHAT TILE ─────────────────────────────────────────────────────────────
+  Widget _buildChatTile(DoctorChatItem doctor) {
+    final hasUnread = doctor.unreadCount > 0;
+    final hasImage =
+        doctor.imageUrl != null && doctor.imageUrl!.isNotEmpty;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() => doctor.unreadCount = 0);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatsPageDoctor(
+              doctorName: doctor.name,
+              chatId: doctor.userId,
             ),
-            child: Row(
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: hasUnread
+                ? AppColors.blueColor.withOpacity(.28)
+                : const Color(0xFFF0F2F5),
+            width: hasUnread ? 1.4 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.03),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // ── Avatar ──────────────────────────────────────────────────
+            Stack(
               children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundColor: AppColors.blueColor.withOpacity(.10),
-                      backgroundImage: AssetImage(image),
-                      onBackgroundImageError: (_, __) {},
-                      // child: Text(
-                      //   getInitials(name),
-                      //   style: TextStyle(
-                      //     color: AppColors.blueColor,
-                      //     fontWeight: FontWeight.bold,
-                      //     fontSize: 16,
-                      //   ),
-                      // ),
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.blueColor.withOpacity(.2),
+                      width: 2,
                     ),
-                    if (isOnline)
-                      Positioned(
-                        bottom: -1,
-                        right: -1,
-                        child: Container(
-                          width: 14,
-                          height: 14,
-                          decoration: BoxDecoration(
-                            color: Colors.green,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: Color(0xFF1F2937),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        lastMessage,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
-                          height: 1.35,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                  ),
+                  child: ClipOval(
+                    child: hasImage
+                        ? Image.network(
+                            doctor.imageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                _buildInitialsAvatar(doctor.name),
+                          )
+                        : _buildInitialsAvatar(doctor.name),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      time,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade500,
-                        fontWeight: FontWeight.w500,
-                      ),
+                // Online dot
+                Positioned(
+                  bottom: 2,
+                  right: 2,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4CAF50),
+                      shape: BoxShape.circle,
+                      border:
+                          Border.all(color: Colors.white, width: 2),
                     ),
-                    const SizedBox(height: 18),
-                    if (unreadCount > 0)
-                      Container(
-                        constraints: const BoxConstraints(
-                          minWidth: 22,
-                          minHeight: 22,
-                        ),
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.blueColor,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          unreadCount.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
               ],
             ),
+            const SizedBox(width: 12),
+            // ── Info ────────────────────────────────────────────────────
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Dr. ${doctor.name}',
+                    style: TextStyle(
+                      fontWeight: hasUnread
+                          ? FontWeight.w800
+                          : FontWeight.w600,
+                      fontSize: 15,
+                      color: const Color(0xFF1F2937),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    doctor.specialty,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.blueColor.withOpacity(.7),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    doctor.lastMessage.isEmpty
+                        ? 'Tap to start chatting...'
+                        : doctor.lastMessage,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: hasUnread
+                          ? const Color(0xFF1F2937)
+                          : Colors.grey.shade500,
+                      fontWeight: hasUnread
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            // ── Time + Badge ─────────────────────────────────────────────
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  doctor.lastMessageTime,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: hasUnread
+                        ? AppColors.blueColor
+                        : Colors.grey.shade400,
+                    fontWeight: hasUnread
+                        ? FontWeight.w700
+                        : FontWeight.normal,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                if (hasUnread)
+                  Container(
+                    padding:  EdgeInsets.all(5),
+                    decoration:  BoxDecoration(
+                      color: AppColors.blueColor,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '${doctor.unreadCount}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  )
+                else
+                  const Icon(Icons.chevron_right,
+                      color: Color(0xFFD1D5DB), size: 18),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInitialsAvatar(String name) {
+    return Container(
+      color: AppColors.blueColor.withOpacity(.12),
+      child: Center(
+        child: Text(
+          _getInitials(name),
+          style: TextStyle(
+            color: AppColors.blueColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
           ),
         ),
       ),
