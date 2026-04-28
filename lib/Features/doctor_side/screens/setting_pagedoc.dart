@@ -181,26 +181,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                   const SizedBox(height: 22),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: handleSaveSettings,
-                      icon: const Icon(Icons.save_outlined),
-                      label: const Text(
-                        'Save All Settings',
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.blueColor,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                      ),
-                    ),
-                  ),
+             
                 ],
               ),
             ),
@@ -224,16 +205,28 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 32,
-            backgroundColor: Colors.white.withOpacity(.18),
-            backgroundImage: profileImageUrl.isNotEmpty
-                ? NetworkImage(profileImageUrl)
-                : null,
-            child: profileImageUrl.isEmpty
-                ? const Icon(Icons.person, color: Colors.white, size: 34)
-                : null,
-          ),
+         GestureDetector(
+  onTap: () {
+    if (profileImageUrl.isEmpty) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FullScreenImage(imageUrl: profileImageUrl),
+      ),
+    );
+  },
+  child: CircleAvatar(
+    radius: 32,
+    backgroundColor: Colors.white.withOpacity(.18),
+    backgroundImage: profileImageUrl.isNotEmpty
+        ? NetworkImage(profileImageUrl)
+        : null,
+    child: profileImageUrl.isEmpty
+        ? const Icon(Icons.person, color: Colors.white, size: 34)
+        : null,
+  ),
+),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -313,29 +306,22 @@ class _SettingsPageState extends State<SettingsPage> {
     required IconData icon,
     TextInputType? keyboardType,
   }) {
-    return TextField(
-      controller: controller,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        filled: true,
-        fillColor: AppColors.greyColor.withOpacity(0.04),
-        labelText: label,
-        labelStyle: TextStyle(color: AppColors.greyColor, fontSize: 14),
-        prefixIcon: Icon(icon, color: AppColors.blueColor),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: AppColors.greyColor.withOpacity(.12)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: AppColors.blueColor, width: 1.7),
-        ),
-      ),
-    );
+    return  TextField(
+  controller: controller,
+  keyboardType: keyboardType,
+  readOnly: true, // 🔥 ده المهم
+  decoration: InputDecoration(
+    filled: true,
+    fillColor: AppColors.greyColor.withOpacity(0.04),
+    labelText: label,
+    labelStyle: TextStyle(color: AppColors.greyColor, fontSize: 14),
+    prefixIcon: Icon(icon, color: AppColors.blueColor),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide.none,
+    ),
+  ),
+);
   }
 
   Widget _buildSwitchTile({
@@ -389,6 +375,27 @@ class _SettingsPageState extends State<SettingsPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
       child: Divider(height: 1, color: Colors.grey.shade200),
+    );
+  }
+}
+class FullScreenImage extends StatelessWidget {
+  final String imageUrl;
+
+  const FullScreenImage({super.key, required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          child: Image.network(imageUrl),
+        ),
+      ),
     );
   }
 }

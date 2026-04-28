@@ -126,7 +126,8 @@ chatService.onMessage((msg) {
       );
     }
   });
-});
+}
+);
     chatService.getHistory(receiverId);
   }
 

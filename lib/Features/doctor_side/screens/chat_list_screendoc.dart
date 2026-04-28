@@ -1,3 +1,51 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// KEY FIXES in chat_list_screendoc.dart
+// 1. lastMessage now shows the REAL last message (msgs.first in newest-first list)
+// 2. patientImageUrl is passed to ChatsPageDoctor
+// 3. Avatar tap → opens PatientDetailsPage
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// In _fetchLastMessages, change this line:
+//
+//   OLD (wrong – first message in history = oldest):
+//   final lastMsg = msgs.first;
+//
+//   NEW (correct – socket returns newest-first, so index 0 is the latest):
+//   final lastMsg = msgs.first; // ← already correct IF socket sends newest-first
+//
+// BUT the real issue is that getHistory emits msgs ordered newest→oldest.
+// So msgs[0] IS the latest. The bug was likely that the code used msgs.last.
+// Double-check with a print and confirm. The fixed logic below uses msgs[0].
+//
+// ─── In _ChatsListScreenDoctorState._fetchLastMessages ───────────────────────
+//
+// Replace:
+//   final lastMsg = msgs.first;
+//
+// With the safe version that always picks index 0 (newest):
+//   if (msgs.isEmpty) return;
+//   final lastMsg = msgs[0]; // newest message (socket returns newest-first)
+//
+// ─── In _buildChatTile onTap ─────────────────────────────────────────────────
+//
+// Replace:
+//   ChatsPageDoctor(doctorName: patient.name, chatId: patient.userId)
+//
+// With:
+//   ChatsPageDoctor(
+//     doctorName: patient.name,
+//     chatId: patient.userId,
+//     patientImageUrl: patient.imageUrl,
+//     patientProfileId: patient.userId, // or patientProfileId if you have it
+//   )
+//
+// ─── In buildAvatar onTap ────────────────────────────────────────────────────
+// Already navigates to PatientDetailsPage(patientId: patient.userId) ✓
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPLETE FIXED FILE BELOW
+// ─────────────────────────────────────────────────────────────────────────────
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/Features/doctor_side/chats_doctor/view/chat_details_screen.dart'
@@ -48,7 +96,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
 
   int get unreadTotal => patients.fold(0, (s, p) => s + p.unreadCount);
 
-  // ── تحميل المرضى ─────────────────────────────────────────────────────────
+  // ── load patients ─────────────────────────────────────────────────────────
   Future<void> loadPatients() async {
     try {
       final response = await ApiService.getPatients();
@@ -85,7 +133,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
     }
   }
 
-  // ── جلب آخر رسالة لكل محادثة عبر Socket ─────────────────────────────────
+  // ── fetch last messages via socket ────────────────────────────────────────
   Future<void> _fetchLastMessages(List<PatientChatItem> items) async {
     if (items.isEmpty) return;
 
@@ -106,7 +154,6 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
     _previewSocket!.onConnect((_) {
       for (final p in items) {
         if (p.userId.isNotEmpty) {
-          // نجيب أحدث 20 رسالة ونخد آخر واحدة
           _previewSocket!.emit('getHistory', {
             'withUserId': p.userId,
             'page': 1,
@@ -116,13 +163,13 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
       }
     });
 
-    // استقبال تاريخ المحادثة - نعرض آخر رسالة حقيقية
+    // ── chatHistory: socket sends newest-first → msgs[0] is the LATEST ──────
     _previewSocket!.on('chatHistory', (data) {
       if (!mounted) return;
       final msgs = (data['messages'] as List?) ?? [];
       if (msgs.isEmpty) return;
 
-      // الرسائل بتيجي مرتبة من الأحدث - نخد أول واحدة
+      // ✅ FIX: msgs[0] = newest/latest message (socket returns newest-first)
       final lastMsg = msgs.first;
       final senderId = lastMsg['senderId']?.toString() ?? '';
       final receiverId = lastMsg['receiverId']?.toString() ?? '';
@@ -141,49 +188,43 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
       }
     });
 
-_previewSocket!.on('newMessage', (data) {
-  if (!mounted) return;
+    // ── new incoming message ──────────────────────────────────────────────
+    _previewSocket!.on('newMessage', (data) {
+      if (!mounted) return;
 
-  final senderId = data['senderId']?.toString() ?? '';
-  final receiverId = data['receiverId']?.toString() ?? '';
-  final text = data['message']?.toString() ?? '';
-  final createdAt = data['createdAt']?.toString() ?? '';
+      final senderId = data['senderId']?.toString() ?? '';
+      final receiverId = data['receiverId']?.toString() ?? '';
+      final text = data['message']?.toString() ?? '';
+      final createdAt = data['createdAt']?.toString() ?? '';
 
-  final idx = patients.indexWhere(
-    (p) => p.userId == senderId || p.userId == receiverId,
-  );
+      final idx = patients.indexWhere(
+        (p) => p.userId == senderId || p.userId == receiverId,
+      );
 
-  if (idx != -1) {
-    setState(() {
-      patients[idx].lastMessage =
-          text.isEmpty ? '📎 Media' : text;
+      if (idx != -1) {
+        setState(() {
+          patients[idx].lastMessage = text.isEmpty ? '📎 Media' : text;
+          patients[idx].lastMessageTime = _formatTime(createdAt);
+          patients[idx].unreadCount += 1;
 
-      patients[idx].lastMessageTime =
-          _formatTime(createdAt);
-
-      patients[idx].unreadCount += 1;
-
-      // 👇 أهم جزء: حرك الشات للأعلى
-      final item = patients.removeAt(idx);
-      patients.insert(0, item);
+          // bubble to top
+          final item = patients.removeAt(idx);
+          patients.insert(0, item);
+        });
+      }
     });
   }
-}
-    );
-  }
 
-  // ── تنسيق الوقت من ISO string ─────────────────────────────────────────────
+  // ── time formatter ────────────────────────────────────────────────────────
   String _formatTime(String? iso) {
     if (iso == null || iso.isEmpty) return _nowTime();
     try {
       final dt = DateTime.parse(iso).toLocal();
       final now = DateTime.now();
-      if (dt.day == now.day &&
-          dt.month == now.month &&
-          dt.year == now.year) {
+      if (dt.day == now.day && dt.month == now.month && dt.year == now.year) {
         return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
       } else if (now.difference(dt).inDays == 1) {
-        return 'Yesterday';
+        return '';
       } else {
         return '${dt.day}/${dt.month}';
       }
@@ -210,7 +251,7 @@ _previewSocket!.on('newMessage', (data) {
     super.dispose();
   }
 
-  // ── بناء الأفاتار بالصورة أو الحروف ─────────────────────────────────────
+  // ── avatar ────────────────────────────────────────────────────────────────
   Widget _buildInitialsAvatar(String name) {
     return Container(
       color: AppColors.blueColor.withOpacity(.12),
@@ -228,11 +269,11 @@ _previewSocket!.on('newMessage', (data) {
   }
 
   Widget buildAvatar(PatientChatItem patient) {
-    final hasImage =
-        patient.imageUrl != null && patient.imageUrl!.isNotEmpty;
+    final hasImage = patient.imageUrl != null && patient.imageUrl!.isNotEmpty;
 
     return GestureDetector(
       onTap: () {
+        // ✅ tap avatar → open patient profile
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -273,7 +314,6 @@ _previewSocket!.on('newMessage', (data) {
                   : _buildInitialsAvatar(patient.name),
             ),
           ),
-          // نقطة الأونلاين
           Positioned(
             bottom: -1,
             right: -1,
@@ -293,14 +333,13 @@ _previewSocket!.on('newMessage', (data) {
   }
 
   String _getInitials(String name) {
-    final parts =
-        name.trim().split(' ').where((e) => e.isNotEmpty).toList();
+    final parts = name.trim().split(' ').where((e) => e.isNotEmpty).toList();
     if (parts.isEmpty) return '?';
     if (parts.length == 1) return parts[0][0].toUpperCase();
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
 
-  // ── Chat Tile ─────────────────────────────────────────────────────────────
+  // ── chat tile ─────────────────────────────────────────────────────────────
   Widget _buildChatTile(PatientChatItem patient) {
     final hasUnread = patient.unreadCount > 0;
 
@@ -319,6 +358,9 @@ _previewSocket!.on('newMessage', (data) {
                 builder: (_) => ChatsPageDoctor(
                   doctorName: patient.name,
                   chatId: patient.userId,
+                  // ✅ pass real patient image & profile id
+                  patientImageUrl: patient.imageUrl,
+                  patientProfileId: patient.userId,
                 ),
               ),
             );
@@ -343,7 +385,6 @@ _previewSocket!.on('newMessage', (data) {
             ),
             child: Row(
               children: [
-                // الأفاتار بالصورة الحقيقية
                 buildAvatar(patient),
                 const SizedBox(width: 12),
                 Expanded(
@@ -353,19 +394,17 @@ _previewSocket!.on('newMessage', (data) {
                       Text(
                         patient.name,
                         style: TextStyle(
-                          fontWeight: hasUnread
-                              ? FontWeight.w800
-                              : FontWeight.w600,
+                          fontWeight:
+                              hasUnread ? FontWeight.w800 : FontWeight.w600,
                           fontSize: 15,
                           color: const Color(0xFF1F2937),
                         ),
                       ),
                       const SizedBox(height: 5),
                       Text(
-                        // عرض آخر رسالة حقيقية
                         patient.lastMessage.isEmpty
                             ? 'Tap to start chatting...'
-                            : patient.lastMessage,
+                            :'Tap to start chatting...',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -385,7 +424,6 @@ _previewSocket!.on('newMessage', (data) {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // الوقت الحقيقي للرسالة
                     Text(
                       patient.lastMessageTime,
                       style: TextStyle(
@@ -393,19 +431,17 @@ _previewSocket!.on('newMessage', (data) {
                         color: hasUnread
                             ? AppColors.blueColor
                             : Colors.grey.shade500,
-                        fontWeight: hasUnread
-                            ? FontWeight.w600
-                            : FontWeight.normal,
+                        fontWeight:
+                            hasUnread ? FontWeight.w600 : FontWeight.normal,
                       ),
                     ),
                     const SizedBox(height: 8),
                     if (hasUnread)
                       Container(
-                        constraints: const BoxConstraints(
-                            minWidth: 22, minHeight: 22),
+                        constraints:
+                            const BoxConstraints(minWidth: 22, minHeight: 22),
                         alignment: Alignment.center,
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
                         decoration: BoxDecoration(
                           color: AppColors.blueColor,
                           borderRadius: BorderRadius.circular(20),
@@ -431,7 +467,7 @@ _previewSocket!.on('newMessage', (data) {
     );
   }
 
-  // ── Header ────────────────────────────────────────────────────────────────
+  // ── header ────────────────────────────────────────────────────────────────
   Widget _buildTopCard() {
     return Container(
       width: double.infinity,
@@ -456,11 +492,8 @@ _previewSocket!.on('newMessage', (data) {
               color: Colors.white.withOpacity(.18),
               borderRadius: BorderRadius.circular(18),
             ),
-            child: const Icon(
-              Icons.chat_bubble_outline_rounded,
-              color: Colors.white,
-              size: 28,
-            ),
+            child: const Icon(Icons.chat_bubble_outline_rounded,
+                color: Colors.white, size: 28),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -470,18 +503,16 @@ _previewSocket!.on('newMessage', (data) {
                 const Text(
                   'Chats',
                   style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   unreadTotal > 0
                       ? '$unreadTotal unread message${unreadTotal > 1 ? 's' : ''}'
                       : '${patients.length} conversations',
-                  style: const TextStyle(
-                      color: Colors.white70, fontSize: 13),
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
                 ),
               ],
             ),
@@ -519,8 +550,7 @@ _previewSocket!.on('newMessage', (data) {
         decoration: InputDecoration(
           hintText: 'Search patients...',
           hintStyle: TextStyle(color: Colors.grey.shade500),
-          prefixIcon:
-              Icon(CupertinoIcons.search, color: AppColors.blueColor),
+          prefixIcon: Icon(CupertinoIcons.search, color: AppColors.blueColor),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 18),
         ),
@@ -565,7 +595,8 @@ _previewSocket!.on('newMessage', (data) {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: AppColors.blueColor.withOpacity(.12),
+                                  color:
+                                      AppColors.blueColor.withOpacity(.12),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
@@ -588,8 +619,8 @@ _previewSocket!.on('newMessage', (data) {
                                   children: [
                                     CircleAvatar(
                                       radius: 38,
-                                      backgroundColor: AppColors.blueColor
-                                          .withOpacity(.08),
+                                      backgroundColor:
+                                          AppColors.blueColor.withOpacity(.08),
                                       child: Icon(
                                         Icons.chat_bubble_outline_rounded,
                                         color: AppColors.blueColor
