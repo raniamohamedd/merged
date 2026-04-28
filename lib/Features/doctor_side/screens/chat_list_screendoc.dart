@@ -157,7 +157,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
           _previewSocket!.emit('getHistory', {
             'withUserId': p.userId,
             'page': 1,
-            'limit': 20,
+            'limit': 1000000,
           });
         }
       }

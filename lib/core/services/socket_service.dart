@@ -46,10 +46,12 @@ class SocketService {
       callback(data);
     });
   }
-
-  void onHistory(Function(dynamic) callback) {
-    socket?.on("chatHistory", callback);
-  }
+void onHistory(Function(dynamic) callback) {
+  socket?.on("chatHistory", (data) {
+    print("📜 CHAT HISTORY RAW RESPONSE: $data"); // 👈 هنا الطباعة
+    callback(data);
+  });
+}
 
   void sendMessage({
     required String receiverId,
@@ -66,7 +68,7 @@ class SocketService {
     socket?.emit("getHistory", {
       "withUserId": userId,
       "page": 1,
-      "limit": 50,
+      "limit": 100000,
     });
   }
 

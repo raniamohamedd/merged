@@ -24,8 +24,8 @@ class ChatMessage {
   final MessageType type;
   final String time;
   final DateTime rawTime;
-  final String? filePath;
-  final String? fileUrl;
+  final String? filePath;    // local path (sent messages)
+  final String? fileUrl;     // remote URL (received messages)
   final String? fileName;
   final Duration? audioDuration;
   final String? senderId;
@@ -60,11 +60,7 @@ String myUserId = "";
 DateTime _parseDate(dynamic value) {
   if (value == null) return DateTime.now();
   if (value is DateTime) return value;
-  try {
-    return DateTime.parse(value.toString()).toLocal();
-  } catch (_) {
-    return DateTime.now();
-  }
+  try { return DateTime.parse(value.toString()).toLocal(); } catch (_) { return DateTime.now(); }
 }
 
 String _formatTime(DateTime dt) =>
@@ -72,64 +68,38 @@ String _formatTime(DateTime dt) =>
 
 String _dateLabel(DateTime dt) {
   final now = DateTime.now();
-  if (dt.year == now.year && dt.month == now.month && dt.day == now.day)
-    return 'Today';
+  if (dt.year == now.year && dt.month == now.month && dt.day == now.day) return 'Today';
   final yesterday = now.subtract(const Duration(days: 1));
-  if (dt.year == yesterday.year &&
-      dt.month == yesterday.month &&
-      dt.day == yesterday.day) return 'Yesterday';
+  if (dt.year == yesterday.year && dt.month == yesterday.month && dt.day == yesterday.day) return 'Yesterday';
   return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
 }
 
-// ─── Parse message type ──────────────────────────────────────────────────────
-// FIX: أكثر دقة في تحديد نوع الرسالة
-MessageType _parseMessageType(dynamic val, {dynamic attachment}) {
-  // لو في attachment يبقى صورة أو ملف
-  if (attachment != null) {
-    final attachType = (attachment['contentType'] ?? attachment['type'] ?? '').toString().toLowerCase();
-    final attachName = (attachment['fileName'] ?? attachment['name'] ?? '').toString().toLowerCase();
-    if (attachType.contains('image') || attachName.endsWith('.jpg') || attachName.endsWith('.jpeg') || attachName.endsWith('.png') || attachName.endsWith('.gif') || attachName.endsWith('.webp')) {
-      return MessageType.image;
-    }
-    if (attachType.contains('audio') || attachName.endsWith('.m4a') || attachName.endsWith('.mp3') || attachName.endsWith('.aac') || attachName.endsWith('.wav')) {
-      return MessageType.audio;
-    }
-    return MessageType.file;
-  }
-
-  final v = (val ?? '').toString().toLowerCase();
-  if (v == 'image' || v.contains('image')) return MessageType.image;
-  if (v == 'audio' || v.contains('audio')) return MessageType.audio;
-  if (v == 'file' || v.contains('file') || v.contains('document')) return MessageType.file;
-  return MessageType.text;
-}
-
-// ─── Upload helper ───────────────────────────────────────────────────────────
+// ─── Upload helper ──────────────────────────────────────────────────────────
+// Uploads a file to your backend and returns its public URL.
+// Adjust the endpoint to match your actual API.
 Future<String?> _uploadFileToServer(File file, String token) async {
   try {
     final request = http.MultipartRequest(
       'POST',
       Uri.parse('https://medpal-production-e325.up.railway.app/upload'),
     );
-    request.headers['Authorization'] = 'Bearer $token';
+    print(request);
+    request.headers['Authorization'] = 'System $token';
     request.files.add(await http.MultipartFile.fromPath('file', file.path));
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);
     if (response.statusCode == 200 || response.statusCode == 201) {
       final data = jsonDecode(response.body);
-      return data['url'] ??
-          data['secure_url'] ??
-          data['data']?['url'] ??
-          data['data']?['secure_url'];
+      return data['url'] ?? data['secure_url'] ?? data['data']?['url'];
     }
+    print(response);
     return null;
-  } catch (e) {
-    debugPrint('Upload error: $e');
+  } catch (_) {
     return null;
   }
 }
 
-// ─── Screen ──────────────────────────────────────────────────────────────────
+// ─── Screen ─────────────────────────────────────────────────────────────────
 class ChatsPageDoctor extends StatefulWidget {
   final String doctorName;
   final String chatId;
@@ -159,14 +129,14 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
   bool _isPlayingAudio = false;
   bool _isRecording = false;
   int _recordSeconds = 0;
-  bool _isSendingMedia = false;
+  bool _isSendingMedia = false; // loading indicator while uploading
 
   String _accessToken = '';
 
   String get receiverId => widget.chatId;
   final List<ChatMessage> messages = [];
 
-  // ── init socket ─────────────────────────────────────────────────────────────
+  // ── init socket ────────────────────────────────────────────────────────────
   Future<void> _initSocket() async {
     final prefs = await SharedPreferences.getInstance();
     _accessToken = prefs.getString("accessToken") ?? "";
@@ -180,18 +150,14 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
 
     // ── new message ──────────────────────────────────────────────────────────
     chatService.onMessage((msg) {
+      print("📥 Incoming Message: $msg");
       if (!mounted) return;
       final dt = _parseDate(msg['createdAt']);
-      final attachment = msg['attachment'];
-      final msgType = _parseMessageType(
-        msg['messageType'] ?? msg['type'],
-        attachment: attachment,
-      );
-
-      final fileUrl = attachment?['secure_url'] ?? msg['fileUrl'] ?? msg['url'];
-      final fileName = attachment?['fileName'] ?? msg['fileName'];
-
+      final msgType = _parseMessageType(msg['messageType'] ?? msg['type']);
       setState(() {
+        
+          final attachment = msg['attachment'];
+
         messages.insert(
           0,
           ChatMessage(
@@ -200,48 +166,64 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
             type: msgType,
             time: _formatTime(dt),
             rawTime: dt,
-            fileUrl: fileUrl?.toString(),
-            fileName: fileName?.toString(),
-            senderId: msg['senderId']?.toString(),
+
+fileUrl: attachment != null ? attachment['secure_url'] : null,
+fileName: attachment != null ? attachment['fileName'] : null,
+            senderId: msg['senderId'],
           ),
         );
       });
     });
+    
 
     // ── history ──────────────────────────────────────────────────────────────
     chatService.onHistory((data) {
+        print("📜 Chat History: $data");
+      
       if (!mounted) return;
       final List msgs = data['messages'] ?? [];
       setState(() {
+        
         messages.clear();
         for (var m in msgs.reversed) {
-          final dt = _parseDate(m['createdAt']);
-          final attachment = m['attachment'];
-          final msgType = _parseMessageType(
-            m['messageType'] ?? m['type'],
-            attachment: attachment,
-          );
+  final dt = _parseDate(m['createdAt']);
+  final msgType = _parseMessageType(m['messageType'] ?? m['type']);
 
-          final fileUrl =
-              attachment?['secure_url'] ?? m['fileUrl'] ?? m['url'];
-          final fileName = attachment?['fileName'] ?? m['fileName'];
+  final attachment = m['attachment'];
 
-          messages.add(ChatMessage(
-            text: m['message'] ?? m['text'] ?? "",
-            isMe: m['senderId'] != receiverId,
-            type: msgType,
-            time: _formatTime(dt),
-            rawTime: dt,
-            fileUrl: fileUrl?.toString(),
-            fileName: fileName?.toString(),
-            senderId: m['senderId']?.toString(),
-          ));
-        }
+  messages.add(ChatMessage(
+    text: m['message'] ?? m['text'] ?? "",
+    isMe: m['senderId'] != receiverId,
+    type: msgType,
+    time: _formatTime(dt),
+    rawTime: dt,
+
+    fileUrl: attachment != null
+        ? attachment['secure_url']
+        : m['fileUrl'],
+
+    fileName: attachment != null
+        ? attachment['fileName']
+        : m['fileName'],
+
+    senderId: m['senderId'],
+  ));
+}
       });
     });
 
     chatService.getHistory(receiverId);
   }
+
+MessageType _parseMessageType(dynamic val) {
+  final v = (val ?? '').toString().toLowerCase();
+
+  if (v.contains('image')) return MessageType.image;
+  if (v.contains('audio')) return MessageType.audio;
+  if (v.contains('file')) return MessageType.file;
+
+  return MessageType.text;
+}
 
   @override
   void initState() {
@@ -253,41 +235,34 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
     });
     _audioPlayer.onPlayerComplete.listen((_) {
       if (!mounted) return;
-      setState(() {
-        _currentlyPlayingPath = null;
-        _isPlayingAudio = false;
-      });
+      setState(() { _currentlyPlayingPath = null; _isPlayingAudio = false; });
     });
   }
 
   @override
   void dispose() {
-    // chatService.disconnect();
+    chatService.disconnect();
     _scrollController.dispose();
     _audioPlayer.dispose();
     _audioRecorder.dispose();
     super.dispose();
   }
 
-  // ── SEND TEXT ────────────────────────────────────────────────────────────────
+  // ── SEND TEXT ─────────────────────────────────────────────────────────────
   void _sendTextMessage(String text) {
     if (text.trim().isEmpty) return;
+    // Emit via socket (your existing event)
     chatService.sendMessage(receiverId: receiverId, message: text);
     final now = DateTime.now();
     setState(() {
-      messages.insert(
-          0,
-          ChatMessage(
-            text: text,
-            isMe: true,
-            type: MessageType.text,
-            time: _formatTime(now),
-            rawTime: now,
-          ));
+      messages.insert(0, ChatMessage(
+        text: text, isMe: true, type: MessageType.text,
+        time: _formatTime(now), rawTime: now,
+      ));
     });
   }
 
-  // ── SEND MEDIA ───────────────────────────────────────────────────────────────
+  // ── SEND MEDIA (upload → emit URL via socket) ─────────────────────────────
   Future<void> _sendMediaMessage({
     required File file,
     required MessageType type,
@@ -295,55 +270,71 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
   }) async {
     setState(() => _isSendingMedia = true);
 
-    // أضف الرسالة محلياً فوراً بدون URL
-    final now = DateTime.now();
-    final tempMsg = ChatMessage(
-      text: fileName ?? _typeLabel(type),
-      isMe: true,
-      type: type,
-      time: _formatTime(now),
-      rawTime: now,
-      filePath: file.path,
-      fileName: fileName,
-    );
-
-    setState(() => messages.insert(0, tempMsg));
-
     try {
-      // Upload file
+      // 1. Upload file to backend
       final url = await _uploadFileToServer(file, _accessToken);
 
-      // Emit via socket
-      chatService.socket?.emit('sendMessage', {
-        'receiverId': receiverId,
-        'message': fileName ?? _typeLabel(type),
-        'type': type.name,
-        if (url != null)
-          'attachment': {
-            'secure_url': url,
-            'fileName': fileName ?? '',
-            'contentType': _contentType(type),
-          }
-      });
-
-      // Update message with URL
-      if (url != null && mounted) {
-        setState(() {
-          final idx = messages.indexOf(tempMsg);
-          if (idx != -1) {
-            messages[idx] = ChatMessage(
-              text: tempMsg.text,
-              isMe: true,
-              type: type,
-              time: tempMsg.time,
-              rawTime: tempMsg.rawTime,
-              filePath: file.path,
-              fileUrl: url,
-              fileName: fileName,
-            );
-          }
-        });
+      if (url == null) {
+        _showSnack('Upload failed. Check your connection.');
+        return;
       }
+
+      // 2. Emit socket event with fileUrl + type
+      // Your backend should handle 'sendMessage' with these extra fields.
+chatService.socket?.emitWithAck(
+  'sendMessage',
+  {
+    'receiverId': receiverId,
+    'message': fileName ?? _typeLabel(type),
+    'type': type.name,
+    'attachment': {
+      'secure_url': url,
+      'fileName': fileName ?? '',
+    }
+  },
+  ack: (response) {
+    print("📩 SEND MESSAGE RESPONSE: $response");
+  },
+);
+print("📤 Sent Message Payload: ${{
+  'receiverId': receiverId,
+  'message': fileName ?? _typeLabel(type),
+  'type': type.name,
+  'attachment': {
+    'secure_url': url,
+    'fileName': fileName ?? '',
+  }
+}}");
+chatService.socket?.emitWithAck(
+  'sendMessage',
+  {
+    'receiverId': receiverId,
+    'message': fileName ?? _typeLabel(type),
+    'type': type.name,
+    'attachment': {
+      'secure_url': url,
+      'fileName': fileName ?? '',
+    }
+  },
+  ack: (response) {
+    print("📩 Server Response: $response");
+  },
+);
+
+      // 3. Add to local list immediately (optimistic UI)
+      final now = DateTime.now();
+      setState(() {
+        messages.insert(0, ChatMessage(
+          text: fileName ?? _typeLabel(type),
+          isMe: true,
+          type: type,
+          time: _formatTime(now),
+          rawTime: now,
+          filePath: file.path,   // local path for display
+          fileUrl: url,          // remote URL
+          fileName: fileName,
+        ));
+      });
     } catch (e) {
       _showSnack('Error sending media: $e');
     } finally {
@@ -351,95 +342,64 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
     }
   }
 
-  String _contentType(MessageType t) {
-    switch (t) {
-      case MessageType.image:
-        return 'image/jpeg';
-      case MessageType.audio:
-        return 'audio/m4a';
-      default:
-        return 'application/octet-stream';
-    }
-  }
-
   String _typeLabel(MessageType t) {
     switch (t) {
-      case MessageType.image:
-        return '📷 Image';
-      case MessageType.audio:
-        return '🎤 Voice message';
-      case MessageType.file:
-        return '📎 File';
-      default:
-        return '';
+      case MessageType.image: return '📷 Image';
+      case MessageType.audio: return '🎤 Voice message';
+      case MessageType.file:  return '📎 File';
+      default: return '';
     }
   }
+Future<void> openUrl(String url) async {
+  final uri = Uri.parse(url);
 
-  // ── PICK IMAGE ───────────────────────────────────────────────────────────────
+  try {
+    await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+  } catch (e) {
+    debugPrint("URL launch error: $e");
+  }
+}
+  // ── PICK IMAGE ────────────────────────────────────────────────────────────
   Future<void> _pickImageFromGallery() async {
-    try {
-      final image = await _picker.pickImage(
-          source: ImageSource.gallery, imageQuality: 80);
-      if (image == null) return;
-      await _sendMediaMessage(
-          file: File(image.path), type: MessageType.image);
-    } catch (e) {
-      _showSnack('Could not pick image');
-    }
+    final image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (image == null) return;
+    await _sendMediaMessage(file: File(image.path), type: MessageType.image);
   }
 
   Future<void> _captureImageFromCamera() async {
-    try {
-      final image = await _picker.pickImage(
-          source: ImageSource.camera, imageQuality: 80);
-      if (image == null) return;
-      await _sendMediaMessage(
-          file: File(image.path), type: MessageType.image);
-    } catch (e) {
-      _showSnack('Could not open camera');
-    }
+    final image = await _picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+    if (image == null) return;
+    await _sendMediaMessage(file: File(image.path), type: MessageType.image);
   }
 
-  // ── PICK FILE ────────────────────────────────────────────────────────────────
+  // ── PICK FILE ─────────────────────────────────────────────────────────────
   Future<void> _pickFile() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'xlsx', 'pptx'],
-      );
-      if (result == null) return;
-      final f = result.files.first;
-      if (f.path == null) return;
-      await _sendMediaMessage(
-        file: File(f.path!),
-        type: MessageType.file,
-        fileName: f.name,
-      );
-    } catch (e) {
-      _showSnack('Could not pick file');
-    }
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'xlsx', 'pptx'],
+    );
+    if (result == null) return;
+    final f = result.files.first;
+    if (f.path == null) return;
+    await _sendMediaMessage(
+      file: File(f.path!),
+      type: MessageType.file,
+      fileName: f.name,
+    );
   }
 
-  // ── RECORDING ────────────────────────────────────────────────────────────────
+  // ── RECORDING ─────────────────────────────────────────────────────────────
   Future<void> _startRecording() async {
-    try {
-      final hasPermission = await _audioRecorder.hasPermission();
-      if (!hasPermission) {
-        _showSnack('Microphone permission denied');
-        return;
-      }
-      final dir = await getTemporaryDirectory();
-      final path =
-          '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _audioRecorder.start(const RecordConfig(), path: path);
-      setState(() {
-        _isRecording = true;
-        _recordSeconds = 0;
-      });
-      _tickRecordTimer();
-    } catch (e) {
-      _showSnack('Could not start recording');
-    }
+    final hasPermission = await _audioRecorder.hasPermission();
+    if (!hasPermission) return;
+    final dir = await getTemporaryDirectory();
+    final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    await _audioRecorder.start(const RecordConfig(), path: path);
+    setState(() { _isRecording = true; _recordSeconds = 0; });
+    _tickRecordTimer();
   }
 
   void _tickRecordTimer() async {
@@ -450,46 +410,28 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
   }
 
   Future<void> _stopRecording() async {
-    try {
-      final path = await _audioRecorder.stop();
-      setState(() {
-        _isRecording = false;
-        _recordSeconds = 0;
-      });
-      if (path != null && File(path).existsSync()) {
-        await _sendMediaMessage(
-          file: File(path),
-          type: MessageType.audio,
-          fileName: 'voice_message.m4a',
-        );
-      }
-    } catch (e) {
-      setState(() {
-        _isRecording = false;
-        _recordSeconds = 0;
-      });
-      _showSnack('Recording error');
+    final path = await _audioRecorder.stop();
+    setState(() { _isRecording = false; _recordSeconds = 0; });
+    if (path != null && File(path).existsSync()) {
+      await _sendMediaMessage(
+        file: File(path),
+        type: MessageType.audio,
+        fileName: 'voice_message.m4a',
+      );
     }
   }
 
   Future<void> _cancelRecording() async {
-    try {
-      await _audioRecorder.stop();
-    } catch (_) {}
-    setState(() {
-      _isRecording = false;
-      _recordSeconds = 0;
-    });
+    await _audioRecorder.stop();
+    setState(() { _isRecording = false; _recordSeconds = 0; });
   }
 
-  // ── PLAY AUDIO ───────────────────────────────────────────────────────────────
+  // ── PLAY AUDIO ────────────────────────────────────────────────────────────
   Future<void> _toggleAudio(ChatMessage msg) async {
-    final localPath = msg.filePath;
-    final remoteUrl = msg.fileUrl;
-    final source = (localPath != null && File(localPath).existsSync())
-        ? localPath
-        : remoteUrl;
-
+    // Prefer local file, fall back to remote URL
+    final source = msg.filePath != null && File(msg.filePath!).existsSync()
+        ? msg.filePath!
+        : msg.fileUrl;
     if (source == null) return;
 
     if (_currentlyPlayingPath == source && _isPlayingAudio) {
@@ -497,29 +439,12 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
       setState(() => _isPlayingAudio = false);
     } else {
       await _audioPlayer.stop();
-      try {
-        if (localPath != null && File(localPath).existsSync()) {
-          await _audioPlayer.play(DeviceFileSource(localPath));
-        } else if (remoteUrl != null) {
-          await _audioPlayer.play(UrlSource(remoteUrl));
-        }
-        setState(() {
-          _currentlyPlayingPath = source;
-          _isPlayingAudio = true;
-        });
-      } catch (e) {
-        _showSnack('Cannot play audio');
+      if (msg.filePath != null && File(msg.filePath!).existsSync()) {
+        await _audioPlayer.play(DeviceFileSource(msg.filePath!));
+      } else if (msg.fileUrl != null) {
+        await _audioPlayer.play(UrlSource(msg.fileUrl!));
       }
-    }
-  }
-
-  // ── OPEN FILE externally (only for real files, not images) ──────────────────
-  Future<void> _openFileExternal(String url) async {
-    final uri = Uri.parse(url);
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      _showSnack('Cannot open file');
+      setState(() { _currentlyPlayingPath = source; _isPlayingAudio = true; });
     }
   }
 
@@ -530,110 +455,90 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
 
   void _showSnack(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   String _formatRecordTime(int s) =>
       '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
 
-  // ── Patient avatar ──────────────────────────────────────────────────────────
+  // ── Patient avatar ─────────────────────────────────────────────────────────
   Widget _buildPatientAvatar({double radius = 20}) {
     final imageUrl = widget.patientImageUrl;
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
     return GestureDetector(
       onTap: () {
         final profileId = widget.patientProfileId ?? widget.chatId;
-        Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) => PatientDetailsPage(patientId: profileId)));
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => PatientDetailsPage(patientId: profileId),
+        ));
       },
       child: CircleAvatar(
         radius: radius,
         backgroundColor: Colors.white.withOpacity(.2),
-        backgroundImage:
-            hasImage ? NetworkImage(imageUrl) as ImageProvider : null,
-        child: !hasImage
-            ? Text(
-                widget.doctorName.isNotEmpty
-                    ? widget.doctorName[0].toUpperCase()
-                    : '?',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: radius * 0.8),
-              )
-            : null,
+        backgroundImage: hasImage ? NetworkImage(imageUrl) as ImageProvider : null,
+        child: !hasImage ? Text(
+          widget.doctorName.isNotEmpty ? widget.doctorName[0].toUpperCase() : '?',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: radius * 0.8),
+        ) : null,
       ),
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // FIX: فتح الصورة داخل التطبيق بالحجم الكامل
-  // ─────────────────────────────────────────────────────────────────────────────
-  void _viewFullImage(ChatMessage msg) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => _FullScreenImageView(msg: msg),
-      ),
-    );
-  }
-
-  // ── Build ─────────────────────────────────────────────────────────────────────
+  // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
-      body: Column(children: [
-        _buildHeader(),
-        if (_isSendingMedia)
-          LinearProgressIndicator(
-            backgroundColor: Colors.grey[200],
-            valueColor:
-                const AlwaysStoppedAnimation<Color>(AppColors.blueColor),
-          ),
-        Expanded(
-          child: ListView.builder(
-            reverse: true,
-            controller: _scrollController,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: messages.length,
-            itemBuilder: (_, i) {
-              final msg = messages[i];
-              Widget? separator;
-              if (i == messages.length - 1) {
-                separator = _buildDateSeparator(msg.rawTime);
-              } else {
-                final next = messages[i + 1];
-                if (msg.rawTime.day != next.rawTime.day ||
-                    msg.rawTime.month != next.rawTime.month ||
-                    msg.rawTime.year != next.rawTime.year) {
+      body: Column(
+        children: [
+          _buildHeader(),
+          // Upload progress bar
+          if (_isSendingMedia)
+            LinearProgressIndicator(
+              backgroundColor: Colors.grey[200],
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.blueColor),
+            ),
+          Expanded(
+            child: ListView.builder(
+              reverse: true,
+              controller: _scrollController,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: messages.length,
+              itemBuilder: (_, i) {
+                final msg = messages[i];
+                Widget? separator;
+                if (i == messages.length - 1) {
                   separator = _buildDateSeparator(msg.rawTime);
+                } else {
+                  final next = messages[i + 1];
+                  if (msg.rawTime.day != next.rawTime.day ||
+                      msg.rawTime.month != next.rawTime.month ||
+                      msg.rawTime.year != next.rawTime.year) {
+                    separator = _buildDateSeparator(msg.rawTime);
+                  }
                 }
-              }
-              return Column(children: [
-                if (separator != null) separator,
-                _buildMessage(msg),
-              ]);
-            },
+                return Column(children: [
+                  if (separator != null) separator,
+                  _buildMessage(msg),
+                ]);
+              },
+            ),
           ),
-        ),
-        _isRecording
-            ? _buildRecordingBar()
-            : ChatInput(
-                onSend: _sendTextMessage,
-                onPickImage: _pickImageFromGallery,
-                onCamera: _captureImageFromCamera,
-                onPickFile: _pickFile,
-                onStartRecord: _startRecording,
-              ),
-      ]),
+          _isRecording
+              ? _buildRecordingBar()
+              : ChatInput(
+                  onSend: _sendTextMessage,
+                  onPickImage: _pickImageFromGallery,
+                  onCamera: _captureImageFromCamera,
+                  onPickFile: _pickFile,
+                  onStartRecord: _startRecording,
+                ),
+        ],
+      ),
     );
   }
 
-  // ── Date separator ───────────────────────────────────────────────────────────
+  // ── Date separator ─────────────────────────────────────────────────────────
   Widget _buildDateSeparator(DateTime dt) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -642,77 +547,52 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(_dateLabel(dt),
-              style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade500,
-                  fontWeight: FontWeight.w500)),
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
         ),
         const Expanded(child: Divider(color: Color(0xFFE5E7EB))),
       ]),
     );
   }
 
-  // ── Header ───────────────────────────────────────────────────────────────────
+  // ── Header ─────────────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 44, 12, 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-            colors: [Color(0xFF1565C0), Color(0xFF1976D2)]),
+        gradient: const LinearGradient(colors: [Color(0xFF1565C0), Color(0xFF1976D2)]),
         borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-              color: const Color(0xFF1976D2).withOpacity(.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6))
-        ],
+        boxShadow: [BoxShadow(color: const Color(0xFF1976D2).withOpacity(.3), blurRadius: 16, offset: const Offset(0, 6))],
       ),
       child: SafeArea(
         bottom: false,
         child: Row(children: [
           IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_ios_new,
-                color: Colors.white, size: 18),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
+            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
+            padding: EdgeInsets.zero, constraints: const BoxConstraints(),
           ),
           const SizedBox(width: 10),
           _buildPatientAvatar(radius: 20),
           const SizedBox(width: 10),
           Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(widget.doctorName,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16)),
-                  Row(children: [
-                    Container(
-                        width: 7,
-                        height: 7,
-                        decoration: const BoxDecoration(
-                            color: Color(0xFF69F0AE),
-                            shape: BoxShape.circle)),
-                    const SizedBox(width: 4),
-                    const Text('Online',
-                        style: TextStyle(
-                            color: Colors.white70, fontSize: 12)),
-                  ]),
-                ]),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(widget.doctorName,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              Row(children: [
+                Container(width: 7, height: 7,
+                  decoration: const BoxDecoration(color: Color(0xFF69F0AE), shape: BoxShape.circle)),
+                const SizedBox(width: 4),
+                const Text('Online', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              ]),
+            ]),
           ),
           IconButton(
             onPressed: _makePhoneCall,
             icon: Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.2),
-                  borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.call_rounded,
-                  color: Colors.white, size: 20),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(.2), borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.call_rounded, color: Colors.white, size: 20),
             ),
             padding: EdgeInsets.zero,
           ),
@@ -721,7 +601,7 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
     );
   }
 
-  // ── Recording bar ─────────────────────────────────────────────────────────────
+  // ── Recording bar ──────────────────────────────────────────────────────────
   Widget _buildRecordingBar() {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
@@ -729,33 +609,20 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(.06),
-              blurRadius: 12,
-              offset: const Offset(0, -2))
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.06), blurRadius: 12, offset: const Offset(0, -2))],
       ),
       child: Row(children: [
         _PulseIcon(),
         const SizedBox(width: 10),
-        Text(
-          '🎤 Recording... ${_formatRecordTime(_recordSeconds)}',
-          style: const TextStyle(
-              color: Color(0xFFE53935),
-              fontWeight: FontWeight.w600,
-              fontSize: 15),
-        ),
+        Text('🎤 Recording... ${_formatRecordTime(_recordSeconds)}',
+          style: const TextStyle(color: Color(0xFFE53935), fontWeight: FontWeight.w600, fontSize: 15)),
         const Spacer(),
         GestureDetector(
           onTap: _cancelRecording,
           child: Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(14)),
-            child:
-                const Icon(Icons.delete_outline, color: Colors.red, size: 22),
+            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(14)),
+            child: const Icon(Icons.delete_outline, color: Colors.red, size: 22),
           ),
         ),
         const SizedBox(width: 10),
@@ -763,26 +630,20 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
           onTap: _stopRecording,
           child: Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-                color: const Color(0xFF1976D2),
-                borderRadius: BorderRadius.circular(14)),
-            child: const Icon(Icons.send_rounded,
-                color: Colors.white, size: 22),
+            decoration: BoxDecoration(color: const Color(0xFF1976D2), borderRadius: BorderRadius.circular(14)),
+            child: const Icon(Icons.send_rounded, color: Colors.white, size: 22),
           ),
         ),
       ]),
     );
   }
 
-  // ── Message bubble ────────────────────────────────────────────────────────────
+  // ── Message bubble ─────────────────────────────────────────────────────────
   Widget _buildMessage(ChatMessage msg) {
     return Align(
-      alignment:
-          msg.isMe ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: msg.isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Row(
-        mainAxisAlignment: msg.isMe
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment: msg.isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           const SizedBox(width: 8),
@@ -790,28 +651,19 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
             margin: EdgeInsets.only(
               left: msg.isMe ? 60 : 0,
               right: msg.isMe ? 12 : 60,
-              top: 4,
-              bottom: 4,
+              top: 4, bottom: 4,
             ),
             padding: _msgPadding(msg),
-            constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.72),
+            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
             decoration: BoxDecoration(
-              color: msg.isMe
-                  ? AppColors.chatBubbleMe
-                  : AppColors.chatBubbleOther,
+              color: msg.isMe ? AppColors.chatBubbleMe : AppColors.chatBubbleOther,
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(18),
                 topRight: const Radius.circular(18),
                 bottomLeft: Radius.circular(msg.isMe ? 18 : 4),
                 bottomRight: Radius.circular(msg.isMe ? 4 : 18),
               ),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2))
-              ],
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(.06), blurRadius: 8, offset: const Offset(0, 2))],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -820,11 +672,7 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
                 _buildContent(msg),
                 const SizedBox(height: 4),
                 Text(msg.time,
-                    style: TextStyle(
-                        fontSize: 10,
-                        color: msg.isMe
-                            ? Colors.white54
-                            : Colors.grey.shade400)),
+                  style: TextStyle(fontSize: 10, color: msg.isMe ? Colors.white54 : Colors.grey.shade400)),
               ],
             ),
           ),
@@ -839,105 +687,52 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
           ? const EdgeInsets.all(4)
           : const EdgeInsets.symmetric(horizontal: 14, vertical: 10);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // FIX: Message content – الصورة تفتح داخل التطبيق
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ── Message content based on type ─────────────────────────────────────────
   Widget _buildContent(ChatMessage msg) {
     switch (msg.type) {
 
-      // ── TEXT ──────────────────────────────────────────────────────────────────
+      // TEXT
       case MessageType.text:
         return Text(msg.text,
-            style: TextStyle(
-                color: msg.isMe ? Colors.white : Colors.black87,
-                fontSize: 15,
-                height: 1.35));
+          style: TextStyle(color: msg.isMe ? Colors.white : Colors.black87, fontSize: 15, height: 1.35));
 
-      // ── IMAGE ─────────────────────────────────────────────────────────────────
+      // IMAGE — show local file first, fall back to network URL
       case MessageType.image:
         Widget imageWidget;
-        final hasLocal =
-            msg.filePath != null && File(msg.filePath!).existsSync();
-        final hasRemote = msg.fileUrl != null && msg.fileUrl!.isNotEmpty;
-
-        if (hasLocal) {
+        if (msg.filePath != null && File(msg.filePath!).existsSync()) {
           imageWidget = Image.file(File(msg.filePath!),
-              width: 220, height: 200, fit: BoxFit.cover);
-        } else if (hasRemote) {
-          imageWidget = Image.network(
-            msg.fileUrl!,
-            width: 220,
-            height: 200,
-            fit: BoxFit.cover,
+            width: 220, height: 200, fit: BoxFit.cover);
+        } else if (msg.fileUrl != null) {
+          imageWidget = Image.network(msg.fileUrl!,
+            width: 220, height: 200, fit: BoxFit.cover,
             loadingBuilder: (_, child, progress) => progress == null
                 ? child
-                : const SizedBox(
-                    width: 220,
-                    height: 200,
-                    child: Center(
-                        child: CircularProgressIndicator(strokeWidth: 2))),
-            errorBuilder: (_, __, ___) => Container(
-              width: 220,
-              height: 200,
-              color: Colors.grey.shade200,
-              child: const Center(
-                  child: Icon(Icons.broken_image,
-                      size: 50, color: Colors.grey)),
-            ),
+                : const SizedBox(width: 220, height: 200,
+                    child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+            errorBuilder: (_, __, ___) =>
+                const Icon(Icons.broken_image, size: 60, color: Colors.grey),
           );
         } else {
-          imageWidget = Container(
-            width: 220,
-            height: 200,
-            color: Colors.grey.shade200,
-            child: const Center(
-                child: CircularProgressIndicator(strokeWidth: 2)),
-          );
+          imageWidget = const Icon(Icons.broken_image, size: 60, color: Colors.grey);
         }
-
-        // FIX: onTap يفتح الصورة داخل التطبيق مش خارجه
         return GestureDetector(
+          // Tap image to view full screen
           onTap: () => _viewFullImage(msg),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: Stack(
-              children: [
-                imageWidget,
-                // أيقونة صغيرة تدل إن الصورة ممكن تتكبر
-                Positioned(
-                  bottom: 6,
-                  right: 6,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(.45),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.zoom_in,
-                        color: Colors.white, size: 16),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          child: ClipRRect(borderRadius: BorderRadius.circular(14), child: imageWidget),
         );
 
-      // ── AUDIO ─────────────────────────────────────────────────────────────────
+      // AUDIO
       case MessageType.audio:
-        final source = (msg.filePath != null &&
-                File(msg.filePath!).existsSync())
-            ? msg.filePath!
-            : msg.fileUrl;
-        final isThisPlaying =
-            _currentlyPlayingPath == source && _isPlayingAudio;
+        final source = msg.filePath != null && File(msg.filePath!).existsSync()
+            ? msg.filePath! : msg.fileUrl;
+        final isThisPlaying = _currentlyPlayingPath == source && _isPlayingAudio;
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             GestureDetector(
               onTap: source != null ? () => _toggleAudio(msg) : null,
               child: Container(
-                width: 38,
-                height: 38,
+                width: 38, height: 38,
                 decoration: BoxDecoration(
                   color: msg.isMe
                       ? Colors.white.withOpacity(.25)
@@ -945,45 +740,31 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  isThisPlaying
-                      ? Icons.pause_rounded
-                      : Icons.play_arrow_rounded,
-                  color: msg.isMe
-                      ? Colors.white
-                      : const Color(0xFF1976D2),
+                  isThisPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  color: msg.isMe ? Colors.white : const Color(0xFF1976D2),
                   size: 22,
                 ),
               ),
             ),
             const SizedBox(width: 10),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                  width: 100,
-                  height: 3,
-                  decoration: BoxDecoration(
-                      color: msg.isMe
-                          ? Colors.white38
-                          : Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(4))),
+              Container(width: 100, height: 3,
+                decoration: BoxDecoration(
+                  color: msg.isMe ? Colors.white38 : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(4))),
               const SizedBox(height: 5),
               Text('Voice Message',
-                  style: TextStyle(
-                      color: msg.isMe
-                          ? Colors.white70
-                          : Colors.grey.shade600,
-                      fontSize: 12)),
+                style: TextStyle(color: msg.isMe ? Colors.white70 : Colors.grey.shade600, fontSize: 12)),
             ]),
           ],
         );
 
-      // ── FILE ──────────────────────────────────────────────────────────────────
+      // FILE
       case MessageType.file:
         return GestureDetector(
           onTap: () {
-            if (msg.fileUrl != null) {
-              _openFileExternal(msg.fileUrl!);
-            }
-          },
+  openUrl(msg.fileUrl!);
+},
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -996,142 +777,60 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(Icons.insert_drive_file_rounded,
-                    color: msg.isMe
-                        ? Colors.white
-                        : const Color(0xFF1976D2),
-                    size: 22),
+                  color: msg.isMe ? Colors.white : const Color(0xFF1976D2), size: 22),
               ),
               const SizedBox(width: 10),
               Flexible(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(msg.fileName ?? msg.text,
-                          style: TextStyle(
-                              color: msg.isMe
-                                  ? Colors.white
-                                  : Colors.black87,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis),
-                      if (msg.fileUrl != null)
-                        Text('Tap to open',
-                            style: TextStyle(
-                                color: msg.isMe
-                                    ? Colors.white60
-                                    : Colors.blue,
-                                fontSize: 11)),
-                    ]),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(msg.fileName ?? msg.text,
+                    style: TextStyle(color: msg.isMe ? Colors.white : Colors.black87, fontSize: 13, fontWeight: FontWeight.w500),
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                  if (msg.fileUrl != null)
+                    Text('Tap to open',
+                      style: TextStyle(color: msg.isMe ? Colors.white60 : Colors.blue, fontSize: 11)),
+                ]),
               ),
             ],
           ),
         );
     }
   }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FIX: شاشة الصورة الكاملة داخل التطبيق مع زووم
-// ─────────────────────────────────────────────────────────────────────────────
-class _FullScreenImageView extends StatelessWidget {
-  final ChatMessage msg;
-
-  const _FullScreenImageView({required this.msg});
-
-  @override
-  Widget build(BuildContext context) {
-    final hasLocal =
-        msg.filePath != null && File(msg.filePath!).existsSync();
-    final hasRemote = msg.fileUrl != null && msg.fileUrl!.isNotEmpty;
-
-    Widget imageWidget;
-    if (hasLocal) {
-      imageWidget = Image.file(File(msg.filePath!), fit: BoxFit.contain);
-    } else if (hasRemote) {
-      imageWidget = Image.network(
-        msg.fileUrl!,
-        fit: BoxFit.contain,
-        loadingBuilder: (_, child, progress) => progress == null
-            ? child
-            : const Center(
-                child: CircularProgressIndicator(color: Colors.white)),
-        errorBuilder: (_, __, ___) => const Center(
-          child: Icon(Icons.broken_image, color: Colors.white, size: 80),
-        ),
-      );
-    } else {
-      imageWidget = const Center(
-        child: Icon(Icons.broken_image, color: Colors.white, size: 80),
-      );
-    }
-
-    return Scaffold(
+  void _viewFullImage(ChatMessage msg) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          // زر Download لو في URL
-          if (hasRemote)
-            IconButton(
-              icon: const Icon(Icons.open_in_browser, color: Colors.white),
-              onPressed: () async {
-                final uri = Uri.parse(msg.fileUrl!);
-                await launchUrl(uri,
-                    mode: LaunchMode.externalApplication);
-              },
-            ),
-        ],
-      ),
+      appBar: AppBar(backgroundColor: Colors.transparent, iconTheme: const IconThemeData(color: Colors.white)),
       body: Center(
         child: InteractiveViewer(
-          minScale: 0.5,
-          maxScale: 5.0,
-          child: imageWidget,
+          child: msg.filePath != null && File(msg.filePath!).existsSync()
+              ? Image.file(File(msg.filePath!))
+              : msg.fileUrl != null
+                  ? Image.network(msg.fileUrl!)
+                  : const Icon(Icons.broken_image, color: Colors.white, size: 80),
         ),
       ),
-    );
+    )));
   }
 }
 
-// ─── Pulse indicator ──────────────────────────────────────────────────────────
+// ─── Pulse indicator ─────────────────────────────────────────────────────────
 class _PulseIcon extends StatefulWidget {
-  @override
-  State<_PulseIcon> createState() => _PulseIconState();
+  @override State<_PulseIcon> createState() => _PulseIconState();
 }
-
-class _PulseIconState extends State<_PulseIcon>
-    with SingleTickerProviderStateMixin {
+class _PulseIconState extends State<_PulseIcon> with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _anim;
-
-  @override
-  void initState() {
+  @override void initState() {
     super.initState();
-    _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 800))
-      ..repeat(reverse: true);
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))..repeat(reverse: true);
     _anim = Tween(begin: 0.5, end: 1.0).animate(_ctrl);
   }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-        animation: _anim,
-        builder: (_, __) => Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-              color: Color.fromRGBO(229, 57, 53, _anim.value),
-              shape: BoxShape.circle),
-        ),
-      );
+  @override void dispose() { _ctrl.dispose(); super.dispose(); }
+  @override Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _anim,
+    builder: (_, __) => Container(width: 12, height: 12,
+      decoration: BoxDecoration(color: Color.fromRGBO(229, 57, 53, _anim.value), shape: BoxShape.circle)),
+  );
 }
 
 // ─── Chat Input ───────────────────────────────────────────────────────────────
@@ -1151,8 +850,7 @@ class ChatInput extends StatefulWidget {
     required this.onStartRecord,
   });
 
-  @override
-  State<ChatInput> createState() => _ChatInputState();
+  @override State<ChatInput> createState() => _ChatInputState();
 }
 
 class _ChatInputState extends State<ChatInput> {
@@ -1160,17 +858,9 @@ class _ChatInputState extends State<ChatInput> {
   bool _hasText = false;
   bool _showAttachMenu = false;
 
-  @override
-  void initState() {
+  @override void initState() {
     super.initState();
-    _controller.addListener(
-        () => setState(() => _hasText = _controller.text.trim().isNotEmpty));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+    _controller.addListener(() => setState(() => _hasText = _controller.text.trim().isNotEmpty));
   }
 
   void _send() {
@@ -1179,8 +869,7 @@ class _ChatInputState extends State<ChatInput> {
     _controller.clear();
   }
 
-  @override
-  Widget build(BuildContext context) {
+  @override Widget build(BuildContext context) {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       if (_showAttachMenu)
         Container(
@@ -1189,44 +878,16 @@ class _ChatInputState extends State<ChatInput> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(.08),
-                  blurRadius: 16,
-                  offset: const Offset(0, -2))
-            ],
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 16, offset: const Offset(0, -2))],
           ),
-          child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _AttachOption(
-                  icon: Icons.photo_library_rounded,
-                  label: 'Gallery',
-                  color: const Color(0xFF9C27B0),
-                  onTap: () {
-                    setState(() => _showAttachMenu = false);
-                    widget.onPickImage();
-                  },
-                ),
-                _AttachOption(
-                  icon: Icons.camera_alt_rounded,
-                  label: 'Camera',
-                  color: const Color(0xFF2196F3),
-                  onTap: () {
-                    setState(() => _showAttachMenu = false);
-                    widget.onCamera();
-                  },
-                ),
-                _AttachOption(
-                  icon: Icons.insert_drive_file_rounded,
-                  label: 'File',
-                  color: const Color(0xFF4CAF50),
-                  onTap: () {
-                    setState(() => _showAttachMenu = false);
-                    widget.onPickFile();
-                  },
-                ),
-              ]),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+            _AttachOption(icon: Icons.photo_library_rounded, label: 'Gallery',
+              color: const Color(0xFF9C27B0), onTap: () { setState(() => _showAttachMenu = false); widget.onPickImage(); }),
+            _AttachOption(icon: Icons.camera_alt_rounded, label: 'Camera',
+              color: const Color(0xFF2196F3), onTap: () { setState(() => _showAttachMenu = false); widget.onCamera(); }),
+            _AttachOption(icon: Icons.insert_drive_file_rounded, label: 'File',
+              color: const Color(0xFF4CAF50), onTap: () { setState(() => _showAttachMenu = false); widget.onPickFile(); }),
+          ]),
         ),
       Container(
         margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
@@ -1234,52 +895,32 @@ class _ChatInputState extends State<ChatInput> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(.06),
-                blurRadius: 12,
-                offset: const Offset(0, -2))
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(.06), blurRadius: 12, offset: const Offset(0, -2))],
         ),
         child: Row(children: [
           GestureDetector(
-            onTap: () =>
-                setState(() => _showAttachMenu = !_showAttachMenu),
+            onTap: () => setState(() => _showAttachMenu = !_showAttachMenu),
             child: Container(
-              width: 40,
-              height: 40,
+              width: 40, height: 40,
               decoration: BoxDecoration(
-                color: _showAttachMenu
-                    ? const Color(0xFF1976D2)
-                    : Colors.grey.shade100,
+                color: _showAttachMenu ? const Color(0xFF1976D2) : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(
-                _showAttachMenu
-                    ? Icons.close_rounded
-                    : Icons.attach_file_rounded,
-                color: _showAttachMenu
-                    ? Colors.white
-                    : Colors.grey.shade600,
-                size: 20,
-              ),
+              child: Icon(_showAttachMenu ? Icons.close_rounded : Icons.attach_file_rounded,
+                color: _showAttachMenu ? Colors.white : Colors.grey.shade600, size: 20),
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: _controller,
-              maxLines: 4,
-              minLines: 1,
+              maxLines: 4, minLines: 1,
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
                 hintText: "Type a message...",
-                hintStyle: TextStyle(
-                    color: Colors.grey.shade400, fontSize: 15),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 10),
+                hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 15),
+                border: InputBorder.none, isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
               ),
             ),
           ),
@@ -1290,28 +931,16 @@ class _ChatInputState extends State<ChatInput> {
                 ? GestureDetector(
                     key: const ValueKey('send'),
                     onTap: _send,
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                          color: const Color(0xFF1976D2),
-                          borderRadius: BorderRadius.circular(14)),
-                      child: const Icon(Icons.send_rounded,
-                          color: Colors.white, size: 20),
-                    ),
+                    child: Container(width: 42, height: 42,
+                      decoration: BoxDecoration(color: const Color(0xFF1976D2), borderRadius: BorderRadius.circular(14)),
+                      child: const Icon(Icons.send_rounded, color: Colors.white, size: 20)),
                   )
                 : GestureDetector(
                     key: const ValueKey('mic'),
                     onTap: widget.onStartRecord,
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(14)),
-                      child: Icon(Icons.mic_rounded,
-                          color: Colors.grey.shade600, size: 22),
-                    ),
+                    child: Container(width: 42, height: 42,
+                      decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(14)),
+                      child: Icon(Icons.mic_rounded, color: Colors.grey.shade600, size: 22)),
                   ),
           ),
         ]),
@@ -1325,32 +954,15 @@ class _AttachOption extends StatelessWidget {
   final String label;
   final Color color;
   final VoidCallback onTap;
-
-  const _AttachOption({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-                color: color.withOpacity(.12),
-                borderRadius: BorderRadius.circular(16)),
-            child: Icon(icon, color: color, size: 26),
-          ),
-          const SizedBox(height: 6),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w500)),
-        ]),
-      );
+  const _AttachOption({required this.icon, required this.label, required this.color, required this.onTap});
+  @override Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Container(width: 52, height: 52,
+        decoration: BoxDecoration(color: color.withOpacity(.12), borderRadius: BorderRadius.circular(16)),
+        child: Icon(icon, color: color, size: 26)),
+      const SizedBox(height: 6),
+      Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
+    ]),
+  );
 }
