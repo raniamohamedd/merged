@@ -127,7 +127,7 @@ class _NotificationsPageDoctorState extends State<NotificationsPageDoctor>
     try {
       await ApiService.acceptRequest(item.id);
       _removeNotification(item);
-      _showSnack('✅ Connection accepted from ${item.patientName}', AppColors.blueColor);
+      _showSnack('Connection accepted from ${item.patientName}', AppColors.blueColor);
     } catch (_) {
       _showSnack('Failed to accept request', Colors.red);
     }
@@ -135,7 +135,7 @@ class _NotificationsPageDoctorState extends State<NotificationsPageDoctor>
 
   Future<void> _rejectRequest(DoctorNotificationItem item) async {
     try {
-      await ApiService.rejectRequest(item.chatId);
+      await ApiService.rejectRequest(item.id);
       _removeNotification(item);
       _showSnack('Request from ${item.patientName} declined', Colors.redAccent);
     } catch (_) {

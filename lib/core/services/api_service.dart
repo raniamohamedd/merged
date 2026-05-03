@@ -172,7 +172,7 @@ static Future<List<Doctor>> getDoctors() async {
       "Authorization": "Bearer $token",
     },
   );
-  print(response);
+  print(response.body);
 
   final data =
       response.body.isNotEmpty ? jsonDecode(response.body) : null;
@@ -280,7 +280,7 @@ static Future<void> rejectRequest(String id) async {
     url,
     headers: {
       "Content-Type": "application/json",
-      "Authorization": "Bearer $token",
+      "Authorization": "System $token",
     },
   );
 
@@ -662,8 +662,8 @@ chatId: e["senderId"]["_id"],  );
         // 'clinicLocation': doctorDetails['clinicLocation'],
         // 'experienceYears': doctorDetails['experienceYears'],
         // 'qualification': doctorDetails['qualification'],
-        'profileImage': doctorDetails['proofDocument']['secure_url'], // صورة البروفايل
-        'licenseNumber': doctorDetails['licenseNumbers'], // رقم الترخيص
+'profileImage': userDetails['image']?['secure_url'] ?? '',
+       'licenseNumber': doctorDetails['licenseNumbers'], // رقم الترخيص
       }
     };
   } else {
@@ -899,12 +899,31 @@ static Future<Map<String, dynamic>> getPatientById(String patientId) async {
     throw Exception("Failed to load patient");
   }
 }
-  static Future<Map<String, dynamic>> uploadProfileImage(File imageFile) async {
+  // static Future<Map<String, dynamic>> uploadProfileImage(File imageFile) async {
+  //   final uri = Uri.parse("$userBaseUrl/image");
+
+  //   final request = http.MultipartRequest('PATCH', uri);
+
+  //   request.headers['Authorization'] = 'Bearer ${UserSession.accessToken}';
+  //   request.files.add(
+  //     await http.MultipartFile.fromPath('image', imageFile.path),
+  //   );
+
+  //   final streamedResponse = await request.send();
+  //   final response = await http.Response.fromStream(streamedResponse);
+
+  //   if (response.statusCode == 200 || response.statusCode == 201) {
+  //     return jsonDecode(response.body);
+  //   } else {
+  //     throw Exception('Failed to upload image: ${response.body}');
+  //   }
+  // }
+   static Future<Map<String, dynamic>> uploadProfileImagedoc(File imageFile) async {
     final uri = Uri.parse("$userBaseUrl/image");
 
     final request = http.MultipartRequest('PATCH', uri);
 
-    request.headers['Authorization'] = 'Bearer ${UserSession.accessToken}';
+    request.headers['Authorization'] = 'System ${UserSession.accessToken}';
     request.files.add(
       await http.MultipartFile.fromPath('image', imageFile.path),
     );

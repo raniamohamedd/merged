@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/Features/doctor_side/screens/doctorsProfile.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
 
@@ -12,6 +13,7 @@ class Doctor {
   final double rating;
   final bool available;
   final bool verified;
+  final Map<String, dynamic> rawData; // ← أضف ده
 
   Doctor({
     required this.id,
@@ -22,26 +24,23 @@ class Doctor {
     required this.rating,
     required this.available,
     required this.verified,
+    required this.rawData, // ← أضف ده
   });
 
- factory Doctor.fromJson(Map<String, dynamic> json) {
-  final user = json['userId'] ?? {};
-
-  return Doctor(
-        id: (user['id'] ?? '').toString(),
-
-    name: (user['fullName'] ?? 'Unknown Doctor').toString(),
-    specialty: (json['specialization'] ?? 'General').toString(),
-    location: (json['clinicLocation'] ?? 'Unknown Location').toString(),
-    experience: int.tryParse(
-          (json['experienceYears'] ?? '0').toString(),
-        ) ??
-        0,
-    rating: 0.0,
-    available: true,
-    verified: json['isVerified'] ?? false,
-  );
-}
+  factory Doctor.fromJson(Map<String, dynamic> json) {
+    final user = json['userId'] ?? {};
+    return Doctor(
+      id: (user['_id'] ?? user['id'] ?? '').toString(), // ← _id مش id
+      name: (user['fullName'] ?? 'Unknown Doctor').toString(),
+      specialty: (json['specialization'] ?? 'General').toString(),
+      location: (json['clinicLocation'] ?? 'Unknown Location').toString(),
+      experience: int.tryParse((json['experienceYears'] ?? '0').toString()) ?? 0,
+      rating: 0.0,
+      available: true,
+      verified: json['isVerified'] ?? false,
+      rawData: json, // ← احتفظ بالـ raw data كامل
+    );
+  }
 }
 
 class DoctorSearchPage extends StatefulWidget {
@@ -331,145 +330,119 @@ class _DoctorSearchPageState extends State<DoctorSearchPage> {
                                 itemBuilder: (context, index) {
                                   final doctor = filteredDoctors[index];
                                   final isRequested =
-                                      requestedDoctors.contains(doctor.id);
-
-                                  return Card(
-                                    color: Colors.white,
-                                    margin: const EdgeInsets.only(bottom: 12),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(18),
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12.0),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Row(
-                                                  children: [
-                                                    Expanded(
-                                                      child: Text('Dr ${doctor.name}'
-                                                        ,
-                                                        style: const TextStyle(
-                                                          fontSize: 16,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    
-                                                    if (doctor.verified)
-                                                      const Icon(
-                                                        Icons.verified_user,
-                                                        color: Colors.blue,
-                                                        size: 18,
-                                                      ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(doctor.specialty),
-                                          const SizedBox(height: 16),
-                                          Row(
-                                            children: [
-                                              const Icon(
-                                                Icons.location_on_outlined,
-                                                size: 20,
-                                              ),
-                                              const SizedBox(width: 10),
-                                              Expanded(
-                                                child: Text(
-                                                  doctor.location,
-                                                  style: TextStyle(
-                                                    color: Colors.grey[600],
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              const Icon(
-                                                Icons.access_time,
-                                                size: 20,
-                                              ),
-                                              const SizedBox(width: 10),
-                                              Text(
-                                                "Experience: ${doctor.experience} years",
-                                                style: TextStyle(
-                                                  color: Colors.grey[600],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              const Icon(
-                                                Icons.star_outline,
-                                                size: 20,
-                                              ),
-                                              const SizedBox(width: 10),
-                                              Text(
-                                                "Rating: ${doctor.rating}/5",
-                                                style: TextStyle(
-                                                  color: Colors.grey[600],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          SizedBox(
-                                            width: double.infinity,
-                                            child: ElevatedButton.icon(
-                                              icon: isRequested
-                                                  ? const Icon(
-                                                      Icons.check,
-                                                      color: Colors.grey,
-                                                    )
-                                                  : const Icon(
-                                                      Icons.person_add,
-                                                      color: Colors.white,
-                                                    ),
-                                              label: Text(
-                                                isRequested
-                                                    ? "Request Sent"
-                                                    : "Send Connection Request",
-                                                style: isRequested
-                                                    ? const TextStyle(
-                                                        color: Colors.grey,
-                                                      )
-                                                    : const TextStyle(
-                                                        color: Colors.white,
-                                                      ),
-                                              ),
-                                              onPressed: doctor.available &&
-                                                      !isRequested
-                                                  ? () => sendRequest(doctor.id)
-                                                  : null,
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor:
-                                                    doctor.available &&
-                                                            !isRequested
-                                                        ? AppColors.blueColor
-                                                        : Colors.grey,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(15),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
+                                      requestedDoctors.contains(doctor.id);return GestureDetector(
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DoctorPublicProfileScreen(doctor: doctor),
+      ),
+    );
+  },
+  child: Card(
+    color: Colors.white,
+    margin: const EdgeInsets.only(bottom: 12),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Dr ${doctor.name}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    if (doctor.verified)
+                      const Icon(
+                        Icons.verified_user,
+                        color: Colors.blue,
+                        size: 18,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(doctor.specialty),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Icon(Icons.location_on_outlined, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  doctor.location,
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(Icons.access_time, size: 20),
+              const SizedBox(width: 10),
+              Text(
+                "Experience: ${doctor.experience} years",
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(Icons.star_outline, size: 20),
+              const SizedBox(width: 10),
+              Text(
+                "Rating: ${doctor.rating}/5",
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              icon: isRequested
+                  ? const Icon(Icons.check, color: Colors.grey)
+                  : const Icon(Icons.person_add, color: Colors.white),
+              label: Text(
+                isRequested ? "Request Sent" : "Send Connection Request",
+                style: isRequested
+                    ? const TextStyle(color: Colors.grey)
+                    : const TextStyle(color: Colors.white),
+              ),
+              onPressed: doctor.available && !isRequested
+                  ? () => sendRequest(doctor.id)
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: doctor.available && !isRequested
+                    ? AppColors.blueColor
+                    : Colors.grey,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
+);
                                 },
                               ),
                             ),
