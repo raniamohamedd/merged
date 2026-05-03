@@ -92,7 +92,141 @@ class _PatientDashboardUIState extends State<HomeScreen> {
   final Map<String, Map<String, String>> medicationDefaults = {};
   List<Map<String, dynamic>> medications = [];
   List<Map<String, String>> upcomingReminders = [];
+void _showMedicationWarningDialog(
+  BuildContext context,
+  Map<String, dynamic> result,
+  String medicationName,
+  String dosage,
+  String repeat,
+  String reminderTime,
+  List<String> sideEffects,
+  String warningLevel,
+  String startDate,
+) {
+  final interaction = result["interactionCheck"] ?? {};
+  final compatibility = result["compatibilityCheck"] ?? {};
+  final details = (compatibility["details"] as List?) ?? [];
 
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: const [
+          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+          SizedBox(width: 8),
+          Text("Medication Warning", style: TextStyle(fontSize: 18)),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Interaction Check
+            if (interaction["summary"] != null) ...[
+              const Text("Drug Interactions",
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+              const SizedBox(height: 4),
+              Text(interaction["summary"], style: const TextStyle(fontSize: 13)),
+              const SizedBox(height: 12),
+            ],
+
+            // ── Compatibility Check
+            if (details.isNotEmpty) ...[
+              const Text("Disease Compatibility",
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+              const SizedBox(height: 4),
+              ...details.map((d) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.orange[50],
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("🦠 ${d["disease"] ?? ""}",
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          const SizedBox(height: 4),
+                          Text(d["reason"] ?? "", style: const TextStyle(fontSize: 12)),
+                          if (d["recommendation"] != null) ...[
+                            const SizedBox(height: 4),
+                            Text("💡 ${d["recommendation"]}",
+                                style: TextStyle(fontSize: 12, color: Colors.blue[700])),
+                          ],
+                        ],
+                      ),
+                    ),
+                  )),
+            ],
+
+            const SizedBox(height: 8),
+            const Text("Do you still want to add this medication?",
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+          onPressed: () async {
+            Navigator.pop(ctx);
+            // ✅ Force add رغم التحذير — بعت force: true
+            await _forceAddMedication(
+              medicationName: medicationName,
+              dosage: dosage,
+              repeat: repeat,
+              reminderTime: reminderTime,
+              sideEffects: sideEffects,
+              warningLevel: warningLevel,
+              startDate: startDate,
+            );
+          },
+          child: const Text("Add Anyway", style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _forceAddMedication({
+  required String medicationName,
+  required String dosage,
+  required String repeat,
+  required String reminderTime,
+  required List<String> sideEffects,
+  required String warningLevel,
+  required String startDate,
+}) async {
+  try {
+    await ApiService.forceAddMedication(
+      medicationName: medicationName,
+      dosage: dosage,
+      repeat: repeat,
+      reminderTime: reminderTime,
+      sideEffects: sideEffects,
+      warningLevel: warningLevel,
+      startDate: startDate,
+    );
+    await _loadMedications();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("✅ $medicationName added"), backgroundColor: Colors.green),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Failed: $e"), backgroundColor: Colors.red),
+    );
+  }
+}
   Future<void> _loadMedications() async {
     try {
       final data = await ApiService.getMyMedications();
@@ -979,37 +1113,48 @@ class _PatientDashboardUIState extends State<HomeScreen> {
                                       .where((e) => e.isNotEmpty)
                                       .toList();
 
-                                  await ApiService.addMedication(
-                                    medicationName: finalName,
-                                    dosage: finalDosage,
-                                    repeat: mapRepeatToApi(repeatType),
-                                    reminderTime: selectedTimes
-                                        .map(formatTimeForApi)
-                                        .join(","),
-                                    sideEffects: sideEffectsList,
-                                    warningLevel:
-                                        mapWarningToApi(warningLevel),
-                                    startDate: getStartDate(),
-                                  );
+                            final result = await ApiService.addMedication(
+  medicationName: finalName,
+  dosage: finalDosage,
+  repeat: mapRepeatToApi(repeatType),
+  reminderTime: selectedTimes
+      .map(formatTimeForApi)
+      .join(","),
+  sideEffects: sideEffectsList,
+  warningLevel: mapWarningToApi(warningLevel),
+  startDate: getStartDate(),
+);
+Navigator.pop(dialogContext);
 
-                                  // ✅ Feature 1: أغلق الـ Dialog فوراً
-                                  Navigator.pop(dialogContext);
+// ✅ لو السيرفر رجع warning → اعرض dialog
+if (result["message"] == "warning" || result["added"] == false) {
+  if (!mounted) return;   // ← أضف السطر ده
+  _showMedicationWarningDialog(
+    context,
+    result,
+    finalName,
+    finalDosage,
+    mapRepeatToApi(repeatType),
+    selectedTimes.map(formatTimeForApi).join(","),
+    sideEffectsList,
+    mapWarningToApi(warningLevel),
+    getStartDate(),
+  );
+  return;
+}
 
-                                  // ✅ Reload من السيرفر
-                                  await _loadMedications();
+// ✅ لو success عادي
+await _loadMedications();
+if (!mounted) return;
+ScaffoldMessenger.of(context).showSnackBar(
+  SnackBar(
+    content: Text("✅ $finalName added successfully"),
+    backgroundColor: Colors.green,
+    behavior: SnackBarBehavior.floating,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  ),
+);
 
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                          "✅ $finalName added successfully"),
-                                      backgroundColor: Colors.green,
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12)),
-                                    ),
-                                  );
                                 } catch (e) {
                                   setDialogState(() => isLoading = false);
                                   ScaffoldMessenger.of(dialogContext)

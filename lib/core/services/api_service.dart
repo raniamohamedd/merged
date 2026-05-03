@@ -310,10 +310,7 @@ static Future<List<dynamic>> getSos() async {
   } else {
     throw Exception("Failed to load SOS");
   }
-}
-// ضع الكود ده في api_service.dart بدل الـ addMedication القديمة
-
-static Future<void> addMedication({
+}static Future<Map<String, dynamic>> addMedication({
   required String medicationName,
   required String dosage,
   required String repeat,
@@ -326,23 +323,20 @@ static Future<void> addMedication({
   final prefs = await SharedPreferences.getInstance();
   final token = prefs.getString("accessToken");
 
-  // ✅ بناء الـ body
   final Map<String, dynamic> body = {
-  "medicationName": "Paracetamol",
-  "dosage": "500mg",
-  "repeat": "daily",
-  "reminderTime": "08:00",
-  "sideEffects": ['bhhbh'],
-  "warningLevel": "safe",
-  "startDate": "2026-05-02T00:00:00Z"
-};
+    "medicationName": medicationName,
+    "dosage": dosage,
+    "repeat": repeat,
+    "reminderTime": reminderTime,
+    "sideEffects": sideEffects,
+    "warningLevel": warningLevel,
+    "startDate": startDate,
+  };
 
-  // ✅ بنضيف repeatEveryHours بس لو every_x_hours
   if (repeat == "every_x_hours" && repeatEveryHours != null) {
     body["repeatEveryHours"] = repeatEveryHours;
   }
 
-  // ✅ طباعة كل اللي بيتبعت للـ debug
   print("═══════════════════════════════════");
   print("ADD MEDICATION REQUEST:");
   print("URL: https://medpal-production-e325.up.railway.app/medication/add");
@@ -360,13 +354,13 @@ static Future<void> addMedication({
     body: jsonEncode(body),
   );
 
-  // ✅ طباعة الـ response كاملة
   print("═══════════════════════════════════");
   print("ADD MEDICATION RESPONSE:");
   print("STATUS: ${response.statusCode}");
   print("BODY: ${response.body}");
   print("═══════════════════════════════════");
 
+  // ✅ check مرة واحدة بس
   if (response.statusCode != 200 && response.statusCode != 201) {
     final data = response.body.isNotEmpty
         ? jsonDecode(response.body)
@@ -377,6 +371,9 @@ static Future<void> addMedication({
           "Failed to add medication: ${response.statusCode}",
     );
   }
+
+  // ✅ رجّع الـ response
+  return jsonDecode(response.body) as Map<String, dynamic>;
 }
 // ✅ الجديد
 static Future<List<dynamic>> getMyMedications() async {
@@ -405,7 +402,46 @@ static Future<List<dynamic>> getMyMedications() async {
   } else {
     throw Exception(data["message"] ?? "Failed to load medications");
   }
-}static Future<Map<String, dynamic>> getPatients() async {
+}
+static Future<void> forceAddMedication({
+  required String medicationName,
+  required String dosage,
+  required String repeat,
+  required String reminderTime,
+  required List<String> sideEffects,
+  required String warningLevel,
+  required String startDate,
+}) async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString("accessToken");
+
+  final body = {
+    "medicationName": medicationName,
+    "dosage": dosage,
+    "repeat": repeat,
+    "reminderTime": reminderTime,
+    "sideEffects": sideEffects,
+    "warningLevel": warningLevel,
+    "startDate": startDate,
+    "forceAdd": true, // ✅ bypass الـ warning
+  };
+
+  final response = await http.post(
+    Uri.parse("https://medpal-production-e325.up.railway.app/medication/add"),
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer $token",
+    },
+    body: jsonEncode(body),
+  );
+
+  if (response.statusCode != 200 && response.statusCode != 201) {
+    final data = jsonDecode(response.body);
+    throw Exception(data["message"] ?? "Failed to add medication");
+  }
+}
+
+static Future<Map<String, dynamic>> getPatients() async {
   final prefs = await SharedPreferences.getInstance();
   final token = prefs.getString("accessToken");
 
