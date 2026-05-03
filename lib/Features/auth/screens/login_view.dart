@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/Features/auth/screens/completeSignUp.dart';
 import 'package:flutter_application_2/Features/auth/screens/forget_password_2.dart';
 import 'package:flutter_application_2/Features/auth/widgets/login_widgets/login_form.dart';
 import 'package:flutter_application_2/Features/auth/widgets/login_widgets/login_header.dart';
@@ -32,231 +33,83 @@ class _LoginScreenState extends State<LoginScreen> {
     passwordController.dispose();
     super.dispose();
   }
-Future<void> handleLogin() async {
-  if (!formKey.currentState!.validate()) return;
 
-  setState(() {
-    loading = true;
-  });
+  Future<void> handleLogin() async {
+    if (!formKey.currentState!.validate()) return;
 
-  try {
-    final response = isPatient
-        ? await ApiService.login(
-            email: emailController.text.trim(),
-            password: passwordController.text.trim(),
-          )
-        : await ApiService.logindoc(
-            email: emailController.text.trim(),
-            password: passwordController.text.trim(),
-          );
+    setState(() => loading = true);
 
-    final prefs = await SharedPreferences.getInstance();
+    try {
+      final response = isPatient
+          ? await ApiService.login(
+              email: emailController.text.trim(),
+              password: passwordController.text.trim(),
+            )
+          : await ApiService.logindoc(
+              email: emailController.text.trim(),
+              password: passwordController.text.trim(),
+            );
 
-final data = response;
+      final prefs = await SharedPreferences.getInstance();
+      final data = response;
+      final tokenData = data["token"];
+      final accessToken = tokenData["accessToken"];
+      final refreshToken = tokenData["refreshToken"];
 
-final tokenData = data["token"];
+      await prefs.setBool("isLoggedIn", true);
+      await prefs.setString("accessToken", accessToken);
+      await prefs.setString("refreshToken", refreshToken);
+      await prefs.setString("role", isPatient ? "patient" : "doctor");
 
-final accessToken = tokenData["accessToken"];
-final refreshToken = tokenData["refreshToken"];
+      UserSession.accessToken = accessToken;
+      UserSession.refreshToken = refreshToken;
 
-    await prefs.setBool("isLoggedIn", true);
-    await prefs.setString("accessToken", accessToken);
-    await prefs.setString("refreshToken", refreshToken);
-    await prefs.setString("role", isPatient ? "patient" : "doctor");
+      if (!mounted) return;
 
-    UserSession.accessToken = accessToken;
-    UserSession.refreshToken = refreshToken;
+      setState(() => loading = false);
 
-    if (!mounted) return;
-
-    setState(() {
-      loading = false;
-    });
-
-    showSuccessToastAndNavigate(
-      isPatient ? "patient" : "doctor",
-    );
-  } catch (e) {
-  setState(() => loading = false);
-  showErrorDialog(e.toString());
-}
-}
-void showErrorDialog(String message) {
-  String friendlyMessage = "Something went wrong. Please try again.";
-  
-  if (message.contains("password")) {
-    friendlyMessage = "Incorrect password. Please try again.";
-  } else if (message.contains("email") || message.contains("user")) {
-    friendlyMessage = "Email not found. Please check your email.";
-  } else if (message.contains("network") || message.contains("socket")) {
-    friendlyMessage = "No internet connection. Please check your network.";
-  } else if (message.contains("timeout")) {
-    friendlyMessage = "Request timed out. Please try again.";
+      showSuccessToastAndNavigate(isPatient ? "patient" : "doctor");
+    } catch (e) {
+      setState(() => loading = false);
+      showErrorDialog(e.toString());
+    }
   }
-  
-  showDialog(
-    context: context,
-    builder: (_) {
-      return Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(.08),
-                blurRadius: 30,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 75,
-                height: 75,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.red.withOpacity(.1),
-                ),
-                child: const Icon(
-                  Icons.error_outline,
-                  size: 40,
-                  color: Colors.red,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                "Login Failed",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                friendlyMessage,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.grey.shade700,
-                  fontSize: 14,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.blueColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Try Again"),
-                ),
-              ),
-            ],
-          ),
+
+  void showErrorDialog(String message) {
+    String friendlyMessage = "Something went wrong. Please try again.";
+
+    if (message.contains("password")) {
+      friendlyMessage = "Incorrect password. Please try again.";
+    } else if (message.contains("email") || message.contains("user")) {
+      friendlyMessage = "Email not found. Please check your email.";
+    } else if (message.contains("network") || message.contains("socket")) {
+      friendlyMessage = "No internet connection. Please check your network.";
+    } else if (message.contains("timeout")) {
+      friendlyMessage = "Request timed out. Please try again.";
+    }
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red.shade400),
+            const SizedBox(width: 8),
+            const Text("Login Failed"),
+          ],
         ),
-      );
-    },
-  );
-}
-  Widget buildRoleSelector() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  isPatient = true;
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: isPatient ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: isPatient
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(.05),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : [],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.person_outline,
-                      color: isPatient ? AppColors.blueColor : Colors.black54,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      "Patient",
-                      style: TextStyle(
-                        color: isPatient ? AppColors.blueColor : Colors.black54,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+        content: Text(friendlyMessage),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.blueColor,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
-          ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  isPatient = false;
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: !isPatient ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: !isPatient
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(.05),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : [],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.medical_services_outlined,
-                      color: !isPatient ? AppColors.blueColor : Colors.black54,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      "Doctor",
-                      style: TextStyle(
-                        color: !isPatient ? AppColors.blueColor : Colors.black54,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            onPressed: () => Navigator.pop(context),
+            child:
+                const Text("Try Again", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -275,7 +128,8 @@ void showErrorDialog(String message) {
         child: Material(
           color: Colors.transparent,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(18),
@@ -299,10 +153,7 @@ void showErrorDialog(String message) {
                     color: AppColors.blueColor.withOpacity(.1),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    Icons.check,
-                    color: AppColors.blueColor,
-                  ),
+                  child: Icon(Icons.check, color: AppColors.blueColor),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -325,23 +176,171 @@ void showErrorDialog(String message) {
 
     overlay.insert(overlayEntry);
 
-    Future.delayed(const Duration(seconds: 2), () {
+    Future.delayed(const Duration(seconds: 2), () async {
       overlayEntry.remove();
 
       if (!mounted) return;
 
-      if (role == "patient") {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => NavigationnScreen()),
-        );
-      } else {
+      // ✅ لو doctor → روح للداشبورد مباشرةً
+      if (role == "doctor") {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => NavigationnScreendoc()),
         );
+        return;
+      }
+
+      // ✅ لو patient → تحقق الأول لو عمل complete signup
+      try {
+        final profileData = await ApiService.getPatientProfile();
+
+        // لو 404 أو data فاضية = مفيش profile = اجبره يكمل
+        if (profileData.isEmpty) {
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const CompleteSignupScreen(),
+            ),
+          );
+          return;
+        }
+
+        // تحقق من البيانات الأساسية
+        final profile = profileData["data"] ?? profileData;
+        final bloodType = profile["bloodType"]?.toString() ?? "";
+        final height = profile["height"];
+        final weight = profile["weight"];
+        final isIncomplete =
+            bloodType.isEmpty || height == null || weight == null;
+
+        if (!mounted) return;
+
+        if (isIncomplete) {
+          // Profile ناقص → اجبره يكمل
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const CompleteSignupScreen(),
+            ),
+          );
+        } else {
+          // Profile مكتمل → روح للداشبورد
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => NavigationnScreen()),
+          );
+        }
+      } catch (_) {
+        // في حالة أي error → اجبره يكمل على الأمان
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const CompleteSignupScreen(),
+          ),
+        );
       }
     });
+  }
+
+  Widget buildRoleSelector() {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => isPatient = true),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: isPatient ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: isPatient
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(.05),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.person_outline,
+                      color: isPatient
+                          ? AppColors.blueColor
+                          : Colors.black54,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      "Patient",
+                      style: TextStyle(
+                        color: isPatient
+                            ? AppColors.blueColor
+                            : Colors.black54,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => isPatient = false),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: !isPatient ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: !isPatient
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(.05),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.medical_services_outlined,
+                      color: !isPatient
+                          ? AppColors.blueColor
+                          : Colors.black54,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      "Doctor",
+                      style: TextStyle(
+                        color: !isPatient
+                            ? AppColors.blueColor
+                            : Colors.black54,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

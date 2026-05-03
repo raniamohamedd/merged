@@ -126,12 +126,12 @@ class _DoctorSearchPageState extends State<DoctorSearchPage> {
     ApiService.sendContactRequest(doctorId).then((response) {
       // إذا تم الإرسال بنجاح
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('تم إرسال طلب الاتصال بنجاح!'),
+        content: Text('Connection has been sent'),
         backgroundColor: Colors.green,
       ));
     }).catchError((e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('فشل إرسال الطلب: $e'),
+        content: Text('Connection not sent $e'),
         backgroundColor: Colors.red,
       ));
     });

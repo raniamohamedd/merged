@@ -221,18 +221,19 @@ Future<void> handleSave() async {
       });
     }
 
-    await ApiService.completeSignup(
-      chronicDiseases: chronicList,
-      allergies: profileData["allergies"] ?? "",
-      bloodType: profileData["bloodType"] ?? "",
-      height: profileData["height"]!.isNotEmpty
-          ? int.parse(profileData["height"]!)
-          : 0,
-      weight: profileData["weight"]!.isNotEmpty
-          ? int.parse(profileData["weight"]!)
-          : 0,
-      note: profileData["notes"] ?? "",
-    );
+// ✅ الجديد
+await ApiService.updatePatientProfile(
+  chronicDiseases: chronicList,
+  allergies: profileData["allergies"] ?? "",
+  bloodType: profileData["bloodType"] ?? "",
+  height: profileData["height"]!.isNotEmpty
+      ? int.parse(profileData["height"]!)
+      : 0,
+  weight: profileData["weight"]!.isNotEmpty
+      ? int.parse(profileData["weight"]!)
+      : 0,
+  note: profileData["notes"] ?? "",
+);
 
     _showTopMessage("Profile completed successfully ✅");
 
@@ -376,45 +377,53 @@ Future<void> handleSave() async {
     );
   }
 
-  Widget buildTextField(
-    String label,
-    String field, {
-    TextInputType? keyboardType,
-    int? maxLines,
-  }) {
-    return TextField(
-      keyboardType: keyboardType,
-      controller: TextEditingController(text: profileData[field]),
-      readOnly: !isEditing,
-      maxLines: maxLines ?? 1,
-      onChanged: (val) {
-        profileData[field] = val;
-      },
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: Colors.white,
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: AppColors.blueColor, width: 2),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: AppColors.blueColor.withOpacity(0.18),
-            width: 1.3,
-          ),
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
+// ✅ الـ fields دي read-only دايماً
+static const _readOnlyFields = {"fullName", "email", "phone", "dateOfBirth", "gender", "address"};
+
+Widget buildTextField(
+  String label,
+  String field, {
+  TextInputType? keyboardType,
+  int? maxLines,
+}) {
+  // ✅ لو field من الـ personal info → read-only دايماً
+  final isReadOnly = !isEditing || _readOnlyFields.contains(field);
+
+  return TextField(
+    keyboardType: keyboardType,
+    controller: TextEditingController(text: profileData[field]),
+    readOnly: isReadOnly,
+    maxLines: maxLines ?? 1,
+    onChanged: (val) {
+      profileData[field] = val;
+    },
+    decoration: InputDecoration(
+      labelText: label,
+      // ✅ لو editable يبان بـ border أزرق واضح
+      filled: true,
+      fillColor: isReadOnly ? Colors.grey.shade50 : Colors.white,
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: AppColors.blueColor, width: 2),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(
+          color: isReadOnly
+              ? Colors.grey.shade200
+              : AppColors.blueColor.withOpacity(0.5),
+          width: 1.3,
         ),
       ),
-    );
-  }
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      // ✅ أيقونة Lock على الـ read-only fields
+      suffixIcon: isReadOnly && isEditing
+          ? Icon(Icons.lock_outline, size: 16, color: Colors.grey.shade400)
+          : null,
+    ),
+  );
+}
 
   Widget buildBadge(String text, Color color) {
     return Container(
@@ -726,7 +735,7 @@ Future<void> handleSave() async {
                 const SizedBox(height: 12),
                 buildTextField("Date of Birth", "dateOfBirth"),
                 const SizedBox(height: 12),
-                buildTextField("Address", "address"),
+                // buildTextField("Address", "address"),
               ],
             ),
             buildSectionCard(

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 
 class MedicationInfoScreen extends StatelessWidget {
-  const MedicationInfoScreen({super.key});
+  const MedicationInfoScreen({super.key, required Map<String, dynamic> medication});
 
   @override
   Widget build(BuildContext context) {
