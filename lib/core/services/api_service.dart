@@ -610,8 +610,7 @@ String formatTimeAgo(String dateString) {
 
     return list.map((e) {
   return DoctorNotificationItem(
-
-    title: "New Connection Request",
+id: e["_id"],    title: "New Connection Request",
     subtitle:
         "${e["senderId"]["fullName"] ?? "Patient"} sent you a connection request",
 time: formatTimeAgo(e["createdAt"]),

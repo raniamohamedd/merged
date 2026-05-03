@@ -10,6 +10,8 @@ class DoctorNotificationItem {
   final String subtitle;
   final String time;
   final String type;
+    final String id;
+
   bool isUnread;
   final String patientName;
   final String chatId;
@@ -21,7 +23,7 @@ class DoctorNotificationItem {
     required this.type,
     required this.isUnread,
     required this.patientName,
-    required this.chatId,
+    required this.chatId, required this.id,
   });
 
   DoctorNotificationItem copyWith({
@@ -40,7 +42,7 @@ class DoctorNotificationItem {
       type: type ?? this.type,
       isUnread: isUnread ?? this.isUnread,
       patientName: patientName ?? this.patientName,
-      chatId: chatId ?? this.chatId,
+      chatId: chatId ?? this.chatId, id: this.id,
     );
   }
 }
@@ -123,7 +125,7 @@ class _NotificationsPageDoctorState extends State<NotificationsPageDoctor>
 
   Future<void> _acceptRequest(DoctorNotificationItem item) async {
     try {
-      await ApiService.acceptRequest(item.chatId);
+      await ApiService.acceptRequest(item.id);
       _removeNotification(item);
       _showSnack('✅ Connection accepted from ${item.patientName}', AppColors.blueColor);
     } catch (_) {
