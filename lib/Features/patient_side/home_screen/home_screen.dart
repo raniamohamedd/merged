@@ -232,6 +232,7 @@ Future<void> _forceAddMedication({
       final data = await ApiService.getMyMedications();
       final loaded = data.map<Map<String, dynamic>>((item) {
         return {
+"iddelete": item["medicineId"]?["_id"] ?? item["_id"],
           "id": item["id"],
           "name": item["medicationName"] ?? "",
           "dosage": item["dosage"] ?? "",
@@ -1294,23 +1295,28 @@ ScaffoldMessenger.of(context).showSnackBar(
             false;
       },
       // ✅ Feature 1: بعد الحذف يظهر الداشبورد مع تحديث الـ list
-      onDismissed: (direction) async {
-        await _cancelMedicationReminders(med);
-        setState(() {
-          medications.removeWhere((item) => item["id"] == med["id"]);
-          _refreshUpcomingReminders();
-        });
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("🗑️ ${med["name"]} removed"),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-      },
+    onDismissed: (direction) async {
+final medId = med["iddelete"].toString();  try {
+    await ApiService.deleteMedication(medId);
+    await _cancelMedicationReminders(med);
+    setState(() => medications.remove(med));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("${med["name"]} deleted"),
+        backgroundColor: Colors.red,
+      ),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Failed to delete: $e"),
+        backgroundColor: Colors.red,
+      ),
+    );
+    // reload عشان يرجع الـ item لو فشل
+    await _loadMedications();
+  }
+},
       child: medicationCard(med),
     );
   }

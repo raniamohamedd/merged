@@ -608,17 +608,27 @@ String formatTimeAgo(String dateString) {
   if (response.statusCode == 200) {
     final List list = data["data"];
 
-    return list.map((e) {
+final allItems = list.map((e) {
+  final sender = e["senderId"];
   return DoctorNotificationItem(
-id: e["_id"],    title: "New Connection Request",
-    subtitle:
-        "${e["senderId"]["fullName"] ?? "Patient"} sent you a connection request",
-time: formatTimeAgo(e["createdAt"]),
+    id: e["_id"],
+    title: "New Connection Request",
+    subtitle: "${sender?["fullName"] ?? "Unknown Patient"} sent you a connection request",
+    time: formatTimeAgo(e["createdAt"]),
     type: "request",
     isUnread: true,
-    patientName: e["senderId"]["email"] ?? "Patient",
-chatId: e["senderId"]["_id"],  );
+    patientName: sender?["fullName"] ?? sender?["email"] ?? "Unknown Patient",
+    chatId: sender?["_id"] ?? "",
+  );
 }).toList();
+
+// ✅ خد آخر request لكل senderId
+final Map<String, DoctorNotificationItem> unique = {};
+for (final item in allItems) {
+  unique[item.chatId] = item; // كل مرة بتعدل على نفس الـ key هياخد الأحدث
+}
+
+return unique.values.toList();
   } else {
     throw Exception("failed to load requests");
   }
@@ -693,7 +703,25 @@ chatId: e["senderId"]["_id"],  );
       throw Exception(data["message"] ?? "Forget Password failed");
     }
   }
+static Future<void> deleteMedication(String medicationId) async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString("accessToken");
 
+  final response = await http.delete(
+    Uri.parse("https://medpal-production-01b6.up.railway.app/medication/remove/$medicationId"),
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer $token",
+    },
+  );
+
+  print("DELETE MED: ${response.statusCode} - ${response.body}");
+
+  if (response.statusCode != 200 && response.statusCode != 201) {
+    final data = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+    throw Exception(data["message"] ?? "Failed to delete medication");
+  }
+}
   static Future<Map<String, dynamic>> resetPassword({
     required String email,
     required String otp,
