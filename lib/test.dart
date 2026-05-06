@@ -4,9 +4,8 @@ import 'package:http/http.dart' as http;
 void main() async {
   await testLogin();
 }
-
 Future<void> testLogin() async {
-  final url = Uri.parse("https://medpal-production-e325.up.railway.app/auth/login");
+  final url = Uri.parse("https://medpal-production-01b6.up.railway.app/auth/login");
 
   try {
     final response = await http.post(

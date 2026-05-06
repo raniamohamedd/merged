@@ -96,7 +96,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
       final request = http.MultipartRequest(
         'PATCH',
-        Uri.parse('https://medpal-production-e325.up.railway.app/user/image'),
+        Uri.parse('https://medpal-production-01b6.up.railway.app/user/image'),
       );
 
       request.headers['Authorization'] = 'System $token';

@@ -109,7 +109,7 @@ Future<Map<String, dynamic>?> _uploadAndGetResponse(
     final request = http.MultipartRequest(
       'POST',
       Uri.parse(
-          'https://medpal-production-e325.up.railway.app/chat/upload/$receiverId'),
+          'https://medpal-production-01b6.up.railway.app/chat/upload/$receiverId'),
     );
     request.headers['authorization'] = 'Bearer $token';
     request.files.add(
@@ -207,7 +207,7 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
 
     chatService = SocketService();
     chatService.connect(
-      "https://medpal-production-e325.up.railway.app",
+      "https://medpal-production-01b6.up.railway.app",
       "Bearer $_accessToken",
     );
 

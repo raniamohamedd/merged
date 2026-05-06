@@ -1,8 +1,8 @@
-import 'dart:io';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:http/http.dart' as http;
 import 'package:record/record.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 class SocketService {
   IO.Socket? socket;
@@ -16,7 +16,7 @@ class SocketService {
     socket = IO.io(
       "$url/chat",
       IO.OptionBuilder()
-          .setTransports(['polling', 'websocket'])
+          .setTransports(['websocket', 'polling'])
           .setExtraHeaders({'authorization': token})
           .setAuth({'token': token})
           .disableAutoConnect()
@@ -26,11 +26,11 @@ class SocketService {
     socket!.connect();
 
     socket!.onConnect((_) {
-      print("✅ Connected: ${socket!.id}");
+      print("✅ Socket Connected: ${socket!.id}");
     });
 
     socket!.onDisconnect((reason) {
-      print("❌ Disconnected — reason: $reason");
+      print("❌ Socket Disconnected — reason: $reason");
     });
 
     socket!.onConnectError((err) {
@@ -38,7 +38,7 @@ class SocketService {
     });
 
     socket!.on('connect_error', (err) {
-      print("⚠️ connect_error event: $err");
+      print("⚠️ connect_error: $err");
     });
 
     socket!.on('error', (err) {
@@ -47,22 +47,22 @@ class SocketService {
   }
 
   void disconnect() {
-    // socket?.disconnect();
-    // socket = null;
+    socket?.disconnect();
+    socket = null;
   }
 
   // =========================
   // 📩 MESSAGES
   // =========================
   void onMessage(Function(dynamic) callback) {
-    socket?.on("newMessage", (data) {
-      callback(data);
-    });
+    socket?.off("newMessage");
+    socket?.on("newMessage", callback);
   }
 
   void onHistory(Function(dynamic) callback) {
+    socket?.off("chatHistory");
     socket?.on("chatHistory", (data) {
-      print("📜 CHAT HISTORY RAW RESPONSE: $data");
+      print("📜 CHAT HISTORY received");
       callback(data);
     });
   }
@@ -96,20 +96,17 @@ class SocketService {
   }) async {
     final picker = ImagePicker();
     final file = await picker.pickImage(source: ImageSource.gallery);
-
     if (file == null) return;
 
     var request = http.MultipartRequest(
       "POST",
       Uri.parse("$url/chat/upload/$receiverId"),
     );
-
     request.headers["authorization"] = token;
     request.files.add(await http.MultipartFile.fromPath("file", file.path));
 
     final response = await request.send();
     final res = await http.Response.fromStream(response);
-
     print("UPLOAD IMAGE RESPONSE: ${res.body}");
   }
 
@@ -135,13 +132,11 @@ class SocketService {
       "POST",
       Uri.parse("$url/chat/upload/$receiverId"),
     );
-
     request.headers["authorization"] = token;
     request.files.add(await http.MultipartFile.fromPath("file", path));
 
     final response = await request.send();
     final res = await http.Response.fromStream(response);
-
     print("🎙️ AUDIO UPLOADED: ${res.body}");
   }
 
@@ -154,7 +149,7 @@ class SocketService {
   // 📞 CALL EVENTS — EMIT
   // =========================
 
-  /// ابعت طلب مكالمة للطرف الثاني
+  /// Step 1: Caller يبعت طلب مكالمة
   void initiateCall({
     required String receiverId,
     String callType = 'voice',
@@ -166,7 +161,7 @@ class SocketService {
     print("📞 initiateCall → $receiverId ($callType)");
   }
 
-  /// ابعت WebRTC Offer
+  /// Step 2 (Caller): بعد ما السيرفر يرد بـ callInitiated → ابعت Offer
   void sendWebrtcOffer({
     required String receiverId,
     required Map<String, dynamic> offer,
@@ -180,7 +175,7 @@ class SocketService {
     print("🔗 webrtcOffer → $receiverId");
   }
 
-  /// ابعت WebRTC Answer
+  /// Step 3 (Callee): بعد ما يستقبل Offer → يبعت Answer
   void sendWebrtcAnswer({
     required String receiverId,
     required Map<String, dynamic> answer,
@@ -194,7 +189,7 @@ class SocketService {
     print("🔗 webrtcAnswer → $receiverId");
   }
 
-  /// ابعت ICE Candidate
+  /// ICE Candidate
   void sendIceCandidate({
     required String receiverId,
     required Map<String, dynamic> candidate,
@@ -212,7 +207,7 @@ class SocketService {
     print("❌ rejectCall ← $callerId");
   }
 
-  /// إنهاء المكالمة الحالية
+  /// إنهاء المكالمة
   void endCall({required String receiverId, String? callId, int? duration}) {
     socket?.emit('endCall', {
       'receiverId': receiverId,
@@ -226,34 +221,52 @@ class SocketService {
   // 📡 CALL EVENTS — LISTEN
   // =========================
 
-  /// كول وارد جديد
+  /// كول وارد جديد (الـ Callee يسمع ده)
   void onIncomingCall(Function(dynamic) callback) {
-    socket?.off('incomingCall'); // avoid duplicates
-    socket?.on("incomingCall", callback);
+    socket?.off('incomingCall');
+    socket?.on("incomingCall", (data) {
+      print("📲 incomingCall received: $data");
+      callback(data);
+    });
   }
 
-  /// السيرفر أكد بدء المكالمة (بعد initiateCall)
+  /// السيرفر أكد بدء المكالمة (الـ Caller يسمع ده)
+  /// بعده: الـ Caller يعمل createOffer ويبعت webrtcOffer
   void onCallInitiated(Function(dynamic) callback) {
     socket?.off('callInitiated');
-    socket?.on("callInitiated", callback);
+    socket?.on("callInitiated", (data) {
+      print("📞 callInitiated received: $data");
+      callback(data);
+    });
   }
 
-  /// وصل webrtcOffer من الطرف الثاني
+  /// وصل webrtcOffer (الـ Callee يسمع ده)
+  /// بعده: يعمل setRemoteDescription + createAnswer + يبعت webrtcAnswer
   void onWebrtcOffer(Function(dynamic) callback) {
     socket?.off('webrtcOffer');
-    socket?.on("webrtcOffer", callback);
+    socket?.on("webrtcOffer", (data) {
+      print("🔗 webrtcOffer received");
+      callback(data);
+    });
   }
 
-  /// وصل webrtcAnswer من الطرف الثاني
+  /// وصل webrtcAnswer (الـ Caller يسمع ده)
+  /// بعده: يعمل setRemoteDescription → المكالمة شغالة
   void onWebrtcAnswer(Function(dynamic) callback) {
     socket?.off('webrtcAnswer');
-    socket?.on("webrtcAnswer", callback);
+    socket?.on("webrtcAnswer", (data) {
+      print("🔗 webrtcAnswer received");
+      callback(data);
+    });
   }
 
-  /// وصل ICE candidate
+  /// وصل ICE candidate (الطرفين يسمعوا ده)
   void onIceCandidate(Function(dynamic) callback) {
     socket?.off('iceCandidate');
-    socket?.on("iceCandidate", callback);
+    socket?.on("iceCandidate", (data) {
+      print("🧊 iceCandidate received");
+      callback(data);
+    });
   }
 
   /// الطرف الثاني رفض المكالمة
@@ -265,7 +278,10 @@ class SocketService {
   /// المكالمة انتهت (من أي طرف)
   void onCallEnded(Function(dynamic) callback) {
     socket?.off('callEnded');
-    socket?.on("callEnded", callback);
+    socket?.on("callEnded", (data) {
+      print("📵 callEnded received");
+      callback(data);
+    });
   }
 
   /// الطرف الثاني قبل المكالمة

@@ -8,9 +8,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   static const String authBaseUrl =
-      "https://medpal-production-e325.up.railway.app/auth";
+      "https://medpal-production-01b6.up.railway.app/auth";
   static const String userBaseUrl =
-      "https://medpal-production-e325.up.railway.app/user";
+      "https://medpal-production-01b6.up.railway.app/user";
 
   static Future<Map<String, dynamic>> signupPatient({
     required String fullName,
@@ -273,7 +273,7 @@ static Future<void> rejectRequest(String id) async {
   final token = prefs.getString("accessToken");
 
   final url = Uri.parse(
-    "https://medpal-production-e325.up.railway.app/doctor/request/$id/reject"
+    "https://medpal-production-01b6.up.railway.app/doctor/request/$id/reject"
   );
 
   final response = await http.patch(
@@ -296,7 +296,7 @@ static Future<List<dynamic>> getSos() async {
   final token = prefs.getString("accessToken");
 
   final response = await http.get(
-    Uri.parse("https://medpal-production-e325.up.railway.app/sos"),
+    Uri.parse("https://medpal-production-01b6.up.railway.app/sos"),
     headers: {
       "Authorization": "System $token",
     },
@@ -339,13 +339,13 @@ static Future<List<dynamic>> getSos() async {
 
   print("═══════════════════════════════════");
   print("ADD MEDICATION REQUEST:");
-  print("URL: https://medpal-production-e325.up.railway.app/medication/add");
+  print("URL: https://medpal-production-01b6.up.railway.app/medication/add");
   print("TOKEN: ${token?.substring(0, 20)}...");
   print("BODY: ${jsonEncode(body)}");
   print("═══════════════════════════════════");
 
   final response = await http.post(
-    Uri.parse("https://medpal-production-e325.up.railway.app/medication/add"),
+    Uri.parse("https://medpal-production-01b6.up.railway.app/medication/add"),
     headers: {
       "Content-Type": "application/json",
       "Accept": "application/json",
@@ -381,7 +381,7 @@ static Future<List<dynamic>> getMyMedications() async {
   final token = prefs.getString("accessToken");
 
   final response = await http.get(
-    Uri.parse("https://medpal-production-e325.up.railway.app/medication/my"),
+    Uri.parse("https://medpal-production-01b6.up.railway.app/medication/my"),
     headers: {
       "Content-Type": "application/json",
       "Authorization": "Bearer $token",
@@ -427,7 +427,7 @@ static Future<void> forceAddMedication({
   };
 
   final response = await http.post(
-    Uri.parse("https://medpal-production-e325.up.railway.app/medication/add"),
+    Uri.parse("https://medpal-production-01b6.up.railway.app/medication/add"),
     headers: {
       "Content-Type": "application/json",
       "Authorization": "Bearer $token",
@@ -446,7 +446,7 @@ static Future<Map<String, dynamic>> getPatients() async {
   final token = prefs.getString("accessToken");
 
   final response = await http.get(
-    Uri.parse("https://medpal-production-e325.up.railway.app/doctor/patients"),
+    Uri.parse("https://medpal-production-01b6.up.railway.app/doctor/patients"),
     headers: {
       "Authorization": "System $token",
     },
@@ -473,7 +473,7 @@ static Future<Map<String, dynamic>> updatePatientProfile({
   final String? token = prefs.getString("accessToken");
 
   final url = Uri.parse(
-    "https://medpal-production-e325.up.railway.app/patient/profile",
+    "https://medpal-production-01b6.up.railway.app/patient/profile",
   );
 
   final response = await http.patch(
@@ -516,7 +516,7 @@ static Future<void> createSos({
   final token = prefs.getString("accessToken");
 
   final url = Uri.parse(
-    "https://medpal-production-e325.up.railway.app/sos",
+    "https://medpal-production-01b6.up.railway.app/sos",
   );
 
   final response = await http.post(
@@ -551,7 +551,7 @@ static Future<void> acceptRequest(String id) async {
   final token = prefs.getString("accessToken");
 
   final url = Uri.parse(
-    "https://medpal-production-e325.up.railway.app/doctor/request/$id/accept"
+    "https://medpal-production-01b6.up.railway.app/doctor/request/$id/accept"
   );
 
   final response = await http.patch(
@@ -571,7 +571,7 @@ static Future<List<DoctorNotificationItem>> getDoctorRequests() async {
   final token = prefs.getString("accessToken");
 
   final url = Uri.parse(
-    "https://medpal-production-e325.up.railway.app/doctor/requests",
+    "https://medpal-production-01b6.up.railway.app/doctor/requests",
   );
 
   final response = await http.get(
@@ -631,7 +631,7 @@ chatId: e["senderId"]["_id"],  );
     throw Exception("Token not found");
   }
 
-  final url = Uri.parse("https://medpal-production-e325.up.railway.app/doctor/profile");
+  final url = Uri.parse("https://medpal-production-01b6.up.railway.app/doctor/profile");
 
   final response = await http.get(
     url,
@@ -734,7 +734,7 @@ static Future<List<dynamic>> getmydoctors() async {
   final token = prefs.getString("accessToken");
 
   final response = await http.get(
-    Uri.parse("https://medpal-production-e325.up.railway.app/patient/doctors"),
+    Uri.parse("https://medpal-production-01b6.up.railway.app/patient/doctors"),
     headers: {
       "Authorization": "Bearer $token",
     },
@@ -847,7 +847,7 @@ static Future<Map<String, dynamic>> getPatientProfile() async {
   final String? token = prefs.getString("accessToken");
 
   final url = Uri.parse(
-    "https://medpal-production-e325.up.railway.app/patient/profile",
+    "https://medpal-production-01b6.up.railway.app/patient/profile",
   );
 
   final response = await http.get(
@@ -878,7 +878,7 @@ static Future<Map<String, dynamic>> getPatientById(String patientId) async {
   final token = prefs.getString("accessToken");
 
   final url = Uri.parse(
-    "https://medpal-production-e325.up.railway.app/doctor/patient/$patientId",
+    "https://medpal-production-01b6.up.railway.app/doctor/patient/$patientId",
   );
 
   final response = await http.get(

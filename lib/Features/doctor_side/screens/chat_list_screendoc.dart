@@ -141,7 +141,7 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
     final token = prefs.getString('accessToken') ?? '';
 
     _previewSocket = IO.io(
-      'https://medpal-production-e325.up.railway.app/chat',
+      'https://medpal-production-01b6.up.railway.app/chat',
       IO.OptionBuilder()
           .setTransports(['websocket'])
           .setExtraHeaders({'authorization': 'System $token'})

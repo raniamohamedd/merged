@@ -96,10 +96,10 @@ class _NotificationsPageDoctorState extends State<NotificationsPageDoctor>
 
   // ── Getters ─────────────────────────────────────────────────────────────
   List<DoctorNotificationItem> get requestNotifications =>
-      notifications.where((e) => e.type == 'request').toList();
+    notifications.where((e) => e.type == 'request').toList().reversed.toList();
 
   List<DoctorNotificationItem> get otherNotifications =>
-      notifications.where((e) => e.type != 'request').toList();
+    notifications.where((e) => e.type == 'request').toList().reversed.toList();
 
   int get unreadCount => notifications.where((e) => e.isUnread).length;
 
