@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_application_2/Features/doctor_side/screens/notification_screen.dart';
 import 'package:flutter_application_2/Features/patient_side/search/search_screen.dart';
 import 'package:flutter_application_2/shared/user_session.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -288,6 +290,71 @@ static Future<void> rejectRequest(String id) async {
     throw Exception("Failed to reject request");
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+static Future<Map<String, dynamic>> scanMedication(File imageFile) async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString("accessToken");
+
+  final url = Uri.parse(
+    "https://medpal-production-01b6.up.railway.app/medication/scan",
+  );
+
+  // ضغط الصورة الأول
+  final compressedBytes = await FlutterImageCompress.compressWithFile(
+    imageFile.absolute.path,
+    quality: 70,
+    minWidth: 1024,
+    minHeight: 1024,
+  );
+
+  // multipart request
+  final request = http.MultipartRequest('POST', url);
+  request.headers.addAll({
+    "Authorization": "Bearer $token",
+    "Accept": "application/json",
+  });
+
+  request.files.add(
+    http.MultipartFile.fromBytes(
+      'file',                         // اسم الـ field زي ما الـ backend بيتوقع
+      compressedBytes!,
+      filename: 'scan.jpg',
+      contentType: http.MediaType('image', 'jpeg'),
+    ),
+  );
+
+  final streamed = await request.send().timeout(const Duration(seconds: 90));
+  final response = await http.Response.fromStream(streamed);
+
+  print("SCAN: ${response.statusCode} - ${response.body}");
+
+  final data = response.body.isNotEmpty
+      ? jsonDecode(response.body)
+      : <String, dynamic>{};
+
+  if (response.statusCode == 200 || response.statusCode == 201) {
+    return data;
+  } else {
+    throw Exception(data["message"] ?? "Failed: ${response.statusCode}");
+  }
+}
+
+
+
+
+
+
 
 static Future<List<dynamic>> getChatHistory() async {
   final prefs = await SharedPreferences.getInstance();

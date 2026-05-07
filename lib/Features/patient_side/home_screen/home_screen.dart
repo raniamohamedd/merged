@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_application_2/Features/patient_side/home_screen/widget/h
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
 import 'package:flutter_application_2/core/services/notification_services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 // ── قائمة الجرعات ─────────────────────────────────────────────────────────────
@@ -1295,67 +1297,236 @@ class _PatientDashboardUIState extends State<HomeScreen> {
     );
   }
 
-  // ─── Scan Dialog ──────────────────────────────────────────────────────────
-  void openScanMedicationDialog() {
+void openScanMedicationDialog() async {
+  // ── اختيار الصورة ──────────────────────────────────────────────────────
+  final picker = ImagePicker();
+  final picked = await showModalBottomSheet<ImageSource>(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text("Select Image Source",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: CircleAvatar(
+              backgroundColor: AppColors.blueColor.withOpacity(.1),
+              child: Icon(Icons.camera_alt, color: AppColors.blueColor),
+            ),
+            title: const Text("Camera"),
+            onTap: () => Navigator.pop(ctx, ImageSource.camera),
+          ),
+          ListTile(
+            leading: CircleAvatar(
+              backgroundColor: AppColors.blueColor.withOpacity(.1),
+              child: Icon(Icons.photo_library, color: AppColors.blueColor),
+            ),
+            title: const Text("Gallery"),
+            onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ),
+    ),
+  );
+
+  if (picked == null) return;
+
+  final XFile? xfile = await picker.pickImage(source: picked, imageQuality: 85);
+  if (xfile == null) return;
+
+  final imageFile = File(xfile.path);
+
+  // ── Loading dialog ─────────────────────────────────────────────────────
+  if (!mounted) return;
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          Icon(Icons.document_scanner, color: AppColors.blueColor),
+          const SizedBox(width: 8),
+          const Text("Scanning..."),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.file(imageFile, height: 140, fit: BoxFit.cover),
+          ),
+          const SizedBox(height: 16),
+          const LinearProgressIndicator(),
+          const SizedBox(height: 8),
+          const Text("Analyzing medication image using AI...",
+              style: TextStyle(fontSize: 13)),
+        ],
+      ),
+    ),
+  );
+
+  // ── API Call ───────────────────────────────────────────────────────────
+  try {
+    final result = await ApiService.scanMedication(imageFile);
+    if (!mounted) return;
+    Navigator.pop(context); // close loading
+
+    final medicine = result["medicine"] as Map<String, dynamic>? ?? {};
+    final detectedName = result["detectedName"] ?? medicine["medicationName"] ?? "Unknown";
+    final dosage       = medicine["dosage"]      ?? "";
+    final sideEffects  = (medicine["sideEffects"] as List?)?.join(", ") ?? "";
+    final category     = medicine["category"]    ?? "";
+    final instructions = medicine["instructions"] ?? "";
+    final contraindications = (medicine["contraindications"] as List?)?.join("\n• ") ?? "";
+    final interactions      = (medicine["interactions"]      as List?)?.join("\n• ") ?? "";
+
+    // ── Result dialog ──────────────────────────────────────────────────
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
-          title: const Text("Scanning Medication"),
-          content: Column(
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.blueColor.withOpacity(.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.medication, color: AppColors.blueColor, size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                detectedName.toString().toUpperCase(),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.medical_services,
-                  size: 60, color: AppColors.blueColor),
-              const SizedBox(height: 15),
-              const Text("Analyzing image using AI...",
-                  style: TextStyle(fontSize: 14)),
-              const SizedBox(height: 15),
-              const CircularProgressIndicator(),
+              const SizedBox(height: 8),
+
+              // Dosage
+              if (dosage.isNotEmpty) _scanInfoRow(Icons.science_outlined, "Dosage", dosage),
+
+              // Category
+              if (category.isNotEmpty) _scanInfoRow(Icons.category_outlined, "Category", category),
+
+              // Instructions
+              if (instructions.isNotEmpty) _scanInfoRow(Icons.info_outline, "Instructions", instructions),
+
+              // Side Effects
+              if (sideEffects.isNotEmpty) _scanInfoRow(Icons.warning_amber_outlined, "Side Effects", sideEffects, color: Colors.orange),
+
+              // Contraindications
+              if (contraindications.isNotEmpty)
+                _scanInfoRow(Icons.block, "Contraindications", "• $contraindications", color: Colors.red),
+
+              // Interactions
+              if (interactions.isNotEmpty)
+                _scanInfoRow(Icons.compare_arrows, "Interactions", "• $interactions", color: Colors.deepOrange),
             ],
           ),
-        );
-      },
-    );
-
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      Navigator.pop(context);
-      showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            title: const Text("Medication Detected"),
-            content: const Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Name: Panadol"),
-                Text("Dosage: 500 mg"),
-                Text("Usage: Pain relief & fever"),
-              ],
-            ),
-            actions: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.blueColor),
-                child: const Text("Add Reminder",
-                    style: TextStyle(color: Colors.white)),
-                onPressed: () {
-                  Navigator.pop(context);
-                  openManualAddDialog();
-                },
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.grey.shade300),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text("Cancel",
+                      style: TextStyle(color: Colors.black54)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.blueColor,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    openManualAddDialog();
+                  },
+                  child: const Text("Add Reminder",
+                      style: TextStyle(color: Colors.white)),
+                ),
               ),
             ],
-          );
-        },
-      );
-    });
+          ),
+        ],
+      ),
+    );
+  } catch (e) {
+    if (!mounted) return;
+    Navigator.pop(context); // close loading
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text("Scan failed: $e"),
+      backgroundColor: Colors.red,
+    ));
   }
+}
+
+// ── Helper widget للـ scan result ─────────────────────────────────────────
+Widget _scanInfoRow(IconData icon, String label, String value,
+    {Color? color}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: color ?? AppColors.blueColor),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: Colors.grey.shade600)),
+              const SizedBox(height: 2),
+              Text(value, style: const TextStyle(fontSize: 13)),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   // ─── Dismissible Card ─────────────────────────────────────────────────────
   Widget dismissibleMedicationCard(Map<String, dynamic> med) {
