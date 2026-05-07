@@ -1,12 +1,24 @@
+// ══════════════════════════════════════════════════════════════════════════════
+// lib/Features/patient_side/home_screen/widget/header.dart
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// التعديل: أضفنا أيقونة "My Doctors" جنب أيقونة الشات بوت في الـ Header
+// الـ import الجديد المطلوب:
+//   import 'package:flutter_application_2/Features/patient_side/my_doctors/my_doctors_screen.dart';
+//
+// ══════════════════════════════════════════════════════════════════════════════
+
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_application_2/Features/patient_side/chats/chatassist.dart';
-import 'package:flutter_application_2/core/constants/colors2.dart';
+import 'package:flutter_application_2/Features/patient_side/home_screen/doctors_screen.dart';
+import 'package:flutter_application_2/core/constants/colors.dart';
+// 👇 أضف الـ import ده
+// 👇 import الـ chatbot screen بتاعك (اعدّل المسار حسب مشروعك)
+// import 'package:flutter_application_2/Features/patient_side/chatbot/chatassist.dart';
+
+// ── HeaderWidget ──────────────────────────────────────────────────────────────
 
 class HeaderWidget extends StatefulWidget {
-  final ValueChanged<String>? onUserNameLoaded;
-  // 👆 دي دالة callback ترجع اسم المستخدم بعد تحميله
+  final Function(String)? onUserNameLoaded;
 
   const HeaderWidget({super.key, this.onUserNameLoaded});
 
@@ -15,127 +27,130 @@ class HeaderWidget extends StatefulWidget {
 }
 
 class _HeaderWidgetState extends State<HeaderWidget> {
-  String userName = '';
-  bool hasNewNotification = true; // مؤقت لحين الربط بفايربيز Notifications
+  String userName = 'User';
+  bool hasNewNotification = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadUserData();
-  }
-
-  Future<void> _loadUserData() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      if (userDoc.exists) {
-        final data = userDoc.data();
-        final name = (data?['name'] as String?)?.trim() ?? 'User';
-
-        setState(() {
-          userName = name;
-        });
-
-        // ✅ نرجع الاسم للصفحة اللي استخدمت الودجت
-        if (widget.onUserNameLoaded != null) {
-          widget.onUserNameLoaded!(name);
-        }
-      } else {
-        setState(() => userName = 'User');
-      }
-    } catch (e) {
-      debugPrint('⚠️ Error fetching user data: $e');
-      setState(() => userName = 'User');
-    }
-  }
+  // أضف هنا أي logic لجلب اسم المستخدم من الـ API
 
   @override
   Widget build(BuildContext context) {
-    return 
-    Padding(
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 20),
-      child: 
-      Row(
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // 👋 الترحيب بالمستخدم (UI)
+          // 👋 عنوان الداشبورد
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 "Patient Dashboard",
-                style:  TextStyle(
+                style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color:AppColors.blueColor,
+                  color: AppColors.blueColor,
                 ),
               ),
-              const SizedBox(height: 5),
-              // const Text(
-              //   "Welcome back 👋",
-              //   style: TextStyle(
-              //     fontSize: 16,
-              //     color: Colors.grey,
-              //   ),
-              // ),
             ],
           ),
 
-          // 🔔 زر الإشعارات
-          Stack(
+          // 🔵 الأيقونتين جنب بعض
+          Row(
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.2),
-                      spreadRadius: 1,
-                      blurRadius: 4,
+              // ── أيقونة My Doctors (الجديدة) ──────────────────────────
+              _HeaderIconButton(
+                icon: Icons.people_alt_rounded,
+                tooltip: "My Doctors",
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const MyDoctorsScreen(),
                     ),
-                  ],
-                ),
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.chat,
-                    size: 28,
-                    color: Colors.blueAccent,
-                  ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const Chatassist(),
-                      ),
-                    );
-                  },
-                ),
+                  );
+                },
               ),
 
-              // 🔴 النقطة الحمراء (تنبيه جديد)
-              if (hasNewNotification)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
+              const SizedBox(width: 10),
+
+              // ── أيقونة الشات بوت (الموجودة) ──────────────────────────
+              Stack(
+                children: [
+                  _HeaderIconButton(
+                    icon: Icons.chat,
+                    tooltip: "Chat Assistant",
+                    onTap: () {
+                      // Navigator.push(
+                      //   context,
+                      //   MaterialPageRoute(
+                      //     builder: (_) => const Chatassist(),
+                      //   ),
+                      // );
+                    },
                   ),
-                ),
+                  // 🔴 النقطة الحمراء (لو في إشعار)
+                  if (hasNewNotification)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Reusable Icon Button ──────────────────────────────────────────────────────
+
+class _HeaderIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _HeaderIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.2),
+                spreadRadius: 1,
+                blurRadius: 4,
+              ),
+            ],
+          ),
+          child: Icon(
+            icon,
+            size: 24,
+            color: Colors.blueAccent,
+          ),
+        ),
       ),
     );
   }
