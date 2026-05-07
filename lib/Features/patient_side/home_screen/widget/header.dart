@@ -9,6 +9,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/Features/patient_side/chats/chatassist.dart';
 import 'package:flutter_application_2/Features/patient_side/home_screen/doctors_screen.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 // 👇 أضف الـ import ده
@@ -80,12 +81,12 @@ class _HeaderWidgetState extends State<HeaderWidget> {
                     icon: Icons.chat,
                     tooltip: "Chat Assistant",
                     onTap: () {
-                      // Navigator.push(
-                      //   context,
-                      //   MaterialPageRoute(
-                      //     builder: (_) => const Chatassist(),
-                      //   ),
-                      // );
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const Chatassist(),
+                        ),
+                      );
                     },
                   ),
                   // 🔴 النقطة الحمراء (لو في إشعار)
