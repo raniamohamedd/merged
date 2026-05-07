@@ -1299,27 +1299,35 @@ key: ValueKey("${med["iddelete"] ?? med["id"] ?? med["name"]}_${med["name"]}"), 
             false;
       },
       // ✅ Feature 1: بعد الحذف يظهر الداشبورد مع تحديث الـ list
-    onDismissed: (direction) async {
-final medId = med["iddelete"].toString();  try {
-    await ApiService.deleteMedication(medId);
-    await _cancelMedicationReminders(med);
-    setState(() => medications.remove(med));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("${med["name"]} deleted"),
-        backgroundColor: Colors.red,
-      ),
-    );
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Failed to delete: $e"),
-        backgroundColor: Colors.red,
-      ),
-    );
-    // reload عشان يرجع الـ item لو فشل
-    await _loadMedications();
-  }
+onDismissed: (direction) {
+  // ✅ Remove synchronously FIRST — this is required by Dismissible
+  final medId = med["iddelete"].toString();
+  final removedMed = med;
+  setState(() => medications.remove(med));
+
+  // Then do async work in the background
+  ApiService.deleteMedication(medId).then((_) {
+    _cancelMedicationReminders(removedMed);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("${removedMed["name"]} deleted"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }).catchError((e) {
+    // Put it back on failure
+    if (mounted) {
+      setState(() => medications.add(removedMed));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Failed to delete: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  });
 },
       child: medicationCard(med),
     );
