@@ -75,7 +75,7 @@ String _formatTime(DateTime dt) =>
 String _dateLabel(DateTime dt) {
   final now = DateTime.now();
   if (dt.year == now.year && dt.month == now.month && dt.day == now.day)
-    return 'Today';
+   print('object');
   final yesterday = now.subtract(const Duration(days: 1));
   if (dt.year == yesterday.year &&
       dt.month == yesterday.month &&
@@ -671,20 +671,10 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
   }
 
   List<dynamic> _buildItems() {
-    final items = <dynamic>[];
-    String? lastLabel;
-    for (final msg in messages) {
-      final label = _dateLabel(msg.rawTime);
-      if (label != lastLabel) {
-        items.add(label);
-        lastLabel = label;
-      }
-      items.add(msg);
-    }
-    return items;
+   
+    return messages;
   }
 
-  // ── HEADER ────────────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       padding: EdgeInsets.only(

@@ -289,6 +289,33 @@ static Future<void> rejectRequest(String id) async {
   }
 }
 
+static Future<List<dynamic>> getChatHistory() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString("accessToken");
+
+  final response = await http.get(
+    Uri.parse("https://medpal-production-01b6.up.railway.app/chatbot/history"),
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer $token",
+    },
+  );
+
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body);
+    return data["data"] ?? [];
+  } else if (response.statusCode == 404) {
+    return [];
+  } else {
+    throw Exception("Failed to load chat history");
+  }
+}
+
+
+
+
+
+
 
 static Future<List<dynamic>> getMySos() async {
   final prefs = await SharedPreferences.getInstance();

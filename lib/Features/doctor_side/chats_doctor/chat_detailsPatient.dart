@@ -612,17 +612,8 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
   }
 
   List<dynamic> _buildItems() {
-    final items = <dynamic>[];
-    String? lastLabel;
-    for (final msg in messages) {
-      final label = _dateLabel(msg.rawTime);
-      if (label != lastLabel) {
-        items.add(label);
-        lastLabel = label;
-      }
-      items.add(msg);
-    }
-    return items;
+    
+  return messages;
   }
 
   // ── HEADER ────────────────────────────────────────────────────────────────

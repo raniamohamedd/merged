@@ -428,8 +428,8 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                   color: AppColors.blueColor.withOpacity(.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child:
-                    Icon(Icons.pie_chart_rounded, color: AppColors.blueColor, size: 18),
+                child: Icon(Icons.pie_chart_rounded,
+                    color: AppColors.blueColor, size: 18),
               ),
               const SizedBox(width: 10),
               const Text('Patient Status Overview',
@@ -444,12 +444,12 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
               ? const Center(
                   child: Padding(
                     padding: EdgeInsets.all(24),
-                    child: Text('No data', style: TextStyle(color: Colors.grey)),
+                    child:
+                        Text('No data', style: TextStyle(color: Colors.grey)),
                   ),
                 )
               : Row(
                   children: [
-                    // Donut chart
                     SizedBox(
                       height: 180,
                       width: 180,
@@ -462,7 +462,8 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                               PieChartSectionData(
                                 value: critical.toDouble(),
                                 color: const Color(0xFFE53935),
-                                title: '${(critical / total * 100).round()}%',
+                                title:
+                                    '${(critical / total * 100).round()}%',
                                 titleStyle: const TextStyle(
                                     fontSize: 11,
                                     color: Colors.white,
@@ -473,7 +474,8 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                               PieChartSectionData(
                                 value: moderate.toDouble(),
                                 color: const Color(0xFFF57C00),
-                                title: '${(moderate / total * 100).round()}%',
+                                title:
+                                    '${(moderate / total * 100).round()}%',
                                 titleStyle: const TextStyle(
                                     fontSize: 11,
                                     color: Colors.white,
@@ -484,7 +486,8 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                               PieChartSectionData(
                                 value: stable.toDouble(),
                                 color: const Color(0xFF2E7D32),
-                                title: '${(stable / total * 100).round()}%',
+                                title:
+                                    '${(stable / total * 100).round()}%',
                                 titleStyle: const TextStyle(
                                     fontSize: 11,
                                     color: Colors.white,
@@ -496,17 +499,16 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                       ),
                     ),
                     const SizedBox(width: 20),
-                    // Legend
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          _legendRow(
-                              const Color(0xFFE53935), 'Critical', critical, total),
+                          _legendRow(const Color(0xFFE53935), 'Critical',
+                              critical, total),
                           const SizedBox(height: 12),
-                          _legendRow(
-                              const Color(0xFFF57C00), 'Moderate', moderate, total),
+                          _legendRow(const Color(0xFFF57C00), 'Moderate',
+                              moderate, total),
                           const SizedBox(height: 12),
                           _legendRow(
                               const Color(0xFF2E7D32), 'Stable', stable, total),
@@ -540,8 +542,7 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
         const SizedBox(width: 8),
         Expanded(
           child: Text(label,
-              style:
-                  const TextStyle(fontSize: 13, color: Colors.black87)),
+              style: const TextStyle(fontSize: 13, color: Colors.black87)),
         ),
         Text('$count',
             style: TextStyle(
@@ -553,10 +554,18 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
     );
   }
 
-  // ── All Patients Missed Doses Bar Chart (full width) ─────────────────────────
+  // ── Taken vs Missed Grouped Bar Chart ────────────────────────────────────────
   Widget _buildAllPatientsMissedDosesChart() {
     final patients = _allPatients;
     if (patients.isEmpty) return const SizedBox.shrink();
+
+    // taken = totalMedications - missedDoses  (أقرب تقريب متاح من الـ API)
+    final takenData = patients.map((p) {
+      final stats = p['stats'] as Map<String, dynamic>? ?? {};
+      final total = (stats['totalMedications'] ?? 0) as int;
+      final missed = (stats['missedDoses'] ?? 0) as int;
+      return (total - missed).clamp(0, total);
+    }).toList();
 
     final missedData = patients.map((p) {
       final stats = p['stats'] as Map<String, dynamic>? ?? {};
@@ -572,9 +581,17 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
             '?')
         .toList();
 
-    final maxY = missedData.isEmpty
+    final allValues = [...takenData, ...missedData];
+    final maxY = allValues.isEmpty
         ? 5.0
-        : (missedData.reduce((a, b) => a > b ? a : b) + 1).toDouble();
+        : (allValues.reduce((a, b) => a > b ? a : b) + 1).toDouble();
+
+    // عرض ديناميكي — كل مريض عنده عمودين فالعرض أكبر
+    const double barWidth = 14;
+    const double groupSpace = 10;
+    final double chartWidth = patients.length > 4
+        ? patients.length * (barWidth * 2 + groupSpace + 18)
+        : double.infinity;
 
     return Container(
       width: double.infinity,
@@ -592,112 +609,148 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Title + legend في نفس الصف
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE53935).withOpacity(.1),
+                  color: AppColors.blueColor.withOpacity(.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.bar_chart_rounded,
-                    color: Color(0xFFE53935), size: 18),
+                child: Icon(Icons.bar_chart_rounded,
+                    color: AppColors.blueColor, size: 18),
               ),
               const SizedBox(width: 10),
-              const Text('Missed Doses — All Patients',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: Colors.black87)),
+              const Expanded(
+                child: Text('Taken vs Missed — All Patients',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: Colors.black87)),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 200,
-            child: missedData.isEmpty
-                ? const Center(child: Text('No data'))
-                : BarChart(
-                    BarChartData(
-                      maxY: maxY,
-                      gridData: FlGridData(
-                        show: true,
-                        drawVerticalLine: false,
-                        getDrawingHorizontalLine: (_) => FlLine(
-                          color: Colors.grey.shade100,
-                          strokeWidth: 1,
-                        ),
-                      ),
-                      borderData: FlBorderData(show: false),
-                      titlesData: FlTitlesData(
-                        topTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false)),
-                        rightTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false)),
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 24,
-                            getTitlesWidget: (v, _) => Text(
-                              '${v.toInt()}',
-                              style: const TextStyle(
-                                  fontSize: 10, color: Colors.grey),
-                            ),
-                          ),
-                        ),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 28,
-                            getTitlesWidget: (v, _) {
-                              final idx = v.toInt();
-                              if (idx < 0 || idx >= patientNames.length) {
-                                return const SizedBox.shrink();
-                              }
-                              final name = patientNames[idx];
-                              return Padding(
-                                padding: const EdgeInsets.only(top: 6),
-                                child: Text(
-                                  name.length > 5
-                                      ? name.substring(0, 5)
-                                      : name,
-                                  style: const TextStyle(
-                                      fontSize: 10, color: Colors.grey),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      barGroups: List.generate(missedData.length, (i) {
-                        final v = missedData[i];
-                        final color = v > 2
-                            ? const Color(0xFFE53935)
-                            : v > 0
-                                ? const Color(0xFFF57C00)
-                                : AppColors.blueColor.withOpacity(.5);
-                        return BarChartGroupData(x: i, barRods: [
-                          BarChartRodData(
-                            toY: v.toDouble(),
-                            color: color,
-                            width: 18,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                        ]);
-                      }),
-                    ),
-                  ),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           // Legend
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _legendDot(AppColors.blueColor.withOpacity(.5), 'No missed'),
+              _legendDot(const Color(0xFF2E7D32), 'Taken'),
               const SizedBox(width: 16),
-              _legendDot(const Color(0xFFF57C00), '1–2 missed'),
-              const SizedBox(width: 16),
-              _legendDot(const Color(0xFFE53935), '3+ missed'),
+              _legendDot(const Color(0xFFE53935), 'Missed'),
             ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 220,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: chartWidth,
+                child: BarChart(
+                  BarChartData(
+                    maxY: maxY,
+                    groupsSpace: groupSpace,
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: false,
+                      getDrawingHorizontalLine: (_) => FlLine(
+                        color: Colors.grey.shade100,
+                        strokeWidth: 1,
+                      ),
+                    ),
+                    borderData: FlBorderData(show: false),
+                    titlesData: FlTitlesData(
+                      topTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false)),
+                      rightTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false)),
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 28,
+                          getTitlesWidget: (v, _) => Text(
+                            '${v.toInt()}',
+                            style: const TextStyle(
+                                fontSize: 10, color: Colors.grey),
+                          ),
+                        ),
+                      ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 32,
+                          getTitlesWidget: (v, _) {
+                            final idx = v.toInt();
+                            if (idx < 0 || idx >= patientNames.length) {
+                              return const SizedBox.shrink();
+                            }
+                            final name = patientNames[idx];
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                name.length > 6
+                                    ? name.substring(0, 6)
+                                    : name,
+                                style: const TextStyle(
+                                    fontSize: 10, color: Colors.grey),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    // Grouped bars: عمود أخضر (taken) + عمود أحمر (missed)
+                    barGroups: List.generate(patients.length, (i) {
+                      final taken = takenData[i];
+                      final missed = missedData[i];
+                      return BarChartGroupData(
+                        x: i,
+                        barsSpace: 4,
+                        barRods: [
+                          // ✅ العمود الأخضر — taken
+                          BarChartRodData(
+                            toY: taken > 0 ? taken.toDouble() : 0.2,
+                            color: const Color(0xFF2E7D32),
+                            width: barWidth,
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                          // ✅ العمود الأحمر — missed
+                          BarChartRodData(
+                            toY: missed > 0 ? missed.toDouble() : 0.2,
+                            color: missed > 0
+                                ? const Color(0xFFE53935)
+                                : Colors.grey.shade200,
+                            width: barWidth,
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                        ],
+                      );
+                    }),
+                    barTouchData: BarTouchData(
+                      touchTooltipData: BarTouchTooltipData(
+                        getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                          final label = rodIndex == 0 ? 'Taken' : 'Missed';
+                          final val = rodIndex == 0
+                              ? takenData[group.x]
+                              : missedData[group.x];
+                          final color = rodIndex == 0
+                              ? const Color(0xFF2E7D32)
+                              : const Color(0xFFE53935);
+                          return BarTooltipItem(
+                            '$label: $val',
+                            TextStyle(
+                                color: color,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -759,52 +812,43 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
           ),
         ),
         const SizedBox(height: 10),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
+        SizedBox(
+          height: 42,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
             children: filters.map((f) {
-              final key = f['key']!;
-              final isActive = _statusFilter == key;
-              final color = key == 'critical'
-                  ? const Color(0xFFE53935)
-                  : key == 'moderate'
-                      ? const Color(0xFFF57C00)
-                      : key == 'stable'
-                          ? const Color(0xFF2E7D32)
-                          : AppColors.blueColor;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: GestureDetector(
-                  onTap: () => setState(() => _statusFilter = key),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isActive ? color : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isActive ? color : Colors.grey.shade300,
-                      ),
-                      boxShadow: isActive
-                          ? [
-                              BoxShadow(
-                                  color: color.withOpacity(.25),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 3))
-                            ]
-                          : [],
-                    ),
-                    child: Text(
-                      f['label']!,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight:
-                            isActive ? FontWeight.bold : FontWeight.normal,
-                        color: isActive
-                            ? Colors.white
-                            : Colors.grey.shade600,
-                      ),
+              final isActive = _statusFilter == f['key'];
+              return GestureDetector(
+                onTap: () =>
+                    setState(() => _statusFilter = f['key'] as String),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.only(right: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color:
+                        isActive ? AppColors.blueColor : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: isActive
+                        ? [
+                            BoxShadow(
+                                color: AppColors.blueColor.withOpacity(.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3))
+                          ]
+                        : [],
+                  ),
+                  child: Text(
+                    f['label'] as String,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: isActive
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      color: isActive
+                          ? Colors.white
+                          : Colors.grey.shade600,
                     ),
                   ),
                 ),
@@ -854,8 +898,8 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                   size: 52, color: Colors.grey.shade300),
               const SizedBox(height: 12),
               Text('No patients found',
-                  style: TextStyle(
-                      color: Colors.grey.shade500, fontSize: 15)),
+                  style:
+                      TextStyle(color: Colors.grey.shade500, fontSize: 15)),
             ],
           ),
         ),
@@ -928,8 +972,8 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                         const SizedBox(height: 2),
                         Text(
                           '${_calcAge(dob)} · ${gender.isNotEmpty ? gender[0].toUpperCase() + gender.substring(1) : '—'} · ${patient['bloodType'] ?? '—'}',
-                          style:
-                              const TextStyle(color: Colors.grey, fontSize: 12),
+                          style: const TextStyle(
+                              color: Colors.grey, fontSize: 12),
                         ),
                       ],
                     ),
@@ -970,8 +1014,8 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                 ),
                 child: Row(
                   children: [
-                    _miniStat(Icons.medication_rounded,
-                        '$totalMeds meds', AppColors.blueColor),
+                    _miniStat(Icons.medication_rounded, '$totalMeds meds',
+                        AppColors.blueColor),
                     _miniStat(Icons.warning_amber_rounded,
                         '$warningMeds warn', const Color(0xFFF57C00)),
                     _miniStat(Icons.local_hospital_rounded,
@@ -979,7 +1023,9 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                     _miniStat(
                         Icons.cancel_outlined,
                         '$missedDoses miss',
-                        missedDoses > 0 ? Colors.red : Colors.green),
+                        missedDoses > 0
+                            ? Colors.red
+                            : Colors.green),
                   ],
                 ),
               ),
@@ -1147,9 +1193,8 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
           else
             ...activeMeds.map((med) {
               final m = med as Map<String, dynamic>;
-              final medId = m['_id']?.toString() ??
-                  m['medicineId']?.toString() ??
-                  '';
+              final medId =
+                  m['_id']?.toString() ?? m['medicineId']?.toString() ?? '';
               final missed = missedMap[medId] ?? 0;
               return _buildMedCard(m, missed);
             }),
@@ -1220,8 +1265,7 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                   color: statusColor.withOpacity(.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child:
-                    Icon(_statusIcon(status), color: statusColor, size: 18),
+                child: Icon(_statusIcon(status), color: statusColor, size: 18),
               ),
               const SizedBox(width: 10),
               const Text('Patient Overview',
@@ -1231,8 +1275,8 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                       color: Colors.black87)),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: statusColor.withOpacity(.1),
                   borderRadius: BorderRadius.circular(20),
@@ -1263,8 +1307,7 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                   ),
                   child: Column(
                     children: [
-                      Icon(item['icon'] as IconData,
-                          color: color, size: 20),
+                      Icon(item['icon'] as IconData, color: color, size: 20),
                       const SizedBox(height: 6),
                       Text('${item['value']}',
                           style: TextStyle(
@@ -1298,8 +1341,7 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
       const Color(0xFFE53935),
     ];
     final warnKeys = ['safe', 'mild', 'moderate', 'caution', 'severe'];
-    final warnValues =
-        warnKeys.map((k) => warnCounts[k] ?? 0).toList();
+    final warnValues = warnKeys.map((k) => warnCounts[k] ?? 0).toList();
     final maxWarn =
         warnValues.isEmpty ? 1 : warnValues.reduce((a, b) => a > b ? a : b);
 
@@ -1324,14 +1366,14 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF57C00).withOpacity(.1),
+                  color: const Color(0xFFFF8F00).withOpacity(.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.warning_amber_rounded,
-                    color: Color(0xFFF57C00), size: 18),
+                child: const Icon(Icons.report_problem_rounded,
+                    color: Color(0xFFFF8F00), size: 18),
               ),
               const SizedBox(width: 10),
-              const Text('Medication Warning Levels',
+              const Text('Warning Levels',
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
@@ -1344,6 +1386,7 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
             child: BarChart(
               BarChartData(
                 maxY: (maxWarn + 1).toDouble(),
+                groupsSpace: 12,
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
@@ -1395,7 +1438,9 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                 barGroups: List.generate(warnValues.length, (i) {
                   return BarChartGroupData(x: i, barRods: [
                     BarChartRodData(
-                      toY: warnValues[i].toDouble(),
+                      toY: warnValues[i] > 0
+                          ? warnValues[i].toDouble()
+                          : 0.2,
                       color: warnColors[i],
                       width: 28,
                       borderRadius: BorderRadius.circular(6),
@@ -1428,9 +1473,8 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
       return name.length > 7 ? name.substring(0, 7) : name;
     }).toList();
 
-    final maxMissed = missedValues.isEmpty
-        ? 1
-        : missedValues.reduce((a, b) => a > b ? a : b);
+    final maxMissed =
+        missedValues.isEmpty ? 1 : missedValues.reduce((a, b) => a > b ? a : b);
 
     return Container(
       width: double.infinity,
@@ -1473,6 +1517,7 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
             child: BarChart(
               BarChartData(
                 maxY: (maxMissed + 1).toDouble(),
+                groupsSpace: 12,
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
@@ -1521,7 +1566,7 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                   final v = missedValues[i];
                   return BarChartGroupData(x: i, barRods: [
                     BarChartRodData(
-                      toY: v.toDouble(),
+                      toY: v > 0 ? v.toDouble() : 0.2,
                       color: v > 0
                           ? const Color(0xFFE53935)
                           : AppColors.blueColor.withOpacity(.5),
@@ -1590,8 +1635,7 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                 const SizedBox(height: 3),
                 Text(
                   '${info['phone'] ?? ''} · ${info['gender'] ?? ''}',
-                  style:
-                      const TextStyle(color: Colors.grey, fontSize: 12),
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ],
             ),
@@ -1691,8 +1735,7 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
   Widget _infoChip(String label, Color bg, Color fg) {
     return Expanded(
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(10),
@@ -1794,10 +1837,10 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: warnColor.withOpacity(.2), width: 1.5),
+        border: Border.all(color: warnColor.withOpacity(.2)),
         boxShadow: [
           BoxShadow(
-              color: warnColor.withOpacity(.06),
+              color: warnColor.withOpacity(.05),
               blurRadius: 8,
               offset: const Offset(0, 3))
         ],
@@ -1816,7 +1859,7 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                 child: Icon(Icons.medication_rounded,
                     color: warnColor, size: 18),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1867,37 +1910,33 @@ class _DoctorReportScreenState extends State<DoctorReportScreen>
                   const SizedBox(width: 4),
                   Text(
                     '$missed missed dose${missed > 1 ? 's' : ''}',
-                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                    style: const TextStyle(
+                        color: Colors.red,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
             ),
           ],
           if (sideEffects.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            const Text('Side Effects:',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black54)),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 6,
-              runSpacing: 6,
-              children: sideEffects
-                  .map((e) => Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: Text(e,
-                            style: const TextStyle(
-                                fontSize: 11, color: Colors.black87)),
-                      ))
-                  .toList(),
+              runSpacing: 4,
+              children: sideEffects.map((se) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(se,
+                      style: const TextStyle(
+                          fontSize: 11, color: Colors.black54)),
+                );
+              }).toList(),
             ),
           ],
         ],

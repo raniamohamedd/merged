@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/colors2.dart';
+import 'package:flutter_application_2/core/services/api_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -20,12 +21,11 @@ class _ChatassistState extends State<Chatassist> {
   final ScrollController scrollController = ScrollController();
   bool _isLoading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    loadMessages();
-    _addInitialBotMessage();
-  }
+@override
+void initState() {
+  super.initState();
+  loadMessages(); // This now loads from API + handles welcome message
+}
 
   void _addInitialBotMessage() {
     if (messages.isEmpty) {
@@ -46,22 +46,43 @@ class _ChatassistState extends State<Chatassist> {
     List<String> encoded = messages.map((msg) => jsonEncode(msg)).toList();
     prefs.setStringList("chat_messages", encoded);
   }
-
-  Future<void> loadMessages() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String>? saved = prefs.getStringList("chat_messages");
-    if (saved != null) {
+Future<void> loadMessages() async {
+  try {
+    final history = await ApiService.getChatHistory();
+    
+    if (history.isNotEmpty) {
       messages.clear();
-      messages.addAll(saved.map((msg) => jsonDecode(msg)));
+      for (final msg in history) {
+        messages.add({
+          "text": msg["content"] ?? "",
+          "isUser": msg["role"] == "user",
+          "image": null,
+          "timestamp": msg["createdAt"] ?? DateTime.now().toString(),
+        });
+      }
       setState(() {});
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (scrollController.hasClients) {
           scrollController.jumpTo(scrollController.position.maxScrollExtent);
         }
       });
+    } else {
+      // No history — show welcome message
+      _addInitialBotMessage();
+    }
+  } catch (e) {
+    // Fallback to local storage on error
+    final prefs = await SharedPreferences.getInstance();
+    List<String>? saved = prefs.getStringList("chat_messages");
+    if (saved != null && saved.isNotEmpty) {
+      messages.clear();
+      messages.addAll(saved.map((msg) => jsonDecode(msg)));
+      setState(() {});
+    } else {
+      _addInitialBotMessage();
     }
   }
-
+}
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (scrollController.hasClients) {
@@ -475,6 +496,7 @@ class _TypingDotsState extends State<_TypingDots> with TickerProviderStateMixin 
   @override
   void initState() {
     super.initState();
+    
     _controllers = List.generate(3, (i) {
       final c = AnimationController(
         vsync: this,
