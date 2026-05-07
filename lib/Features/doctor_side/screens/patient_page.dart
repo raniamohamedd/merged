@@ -10,6 +10,7 @@ class Patient {
   final int age;
   final int medicationCount;
   final String status;
+  final String? imageUrl; // ✅
 
   Patient({
     required this.userId,
@@ -18,8 +19,10 @@ class Patient {
     required this.age,
     required this.medicationCount,
     required this.status,
+    this.imageUrl,
   });
 
+  // ✅ الـ method موجودة جوه الـ class
   static String _getStatus(Map<String, dynamic> json) {
     final diseases = json['chronicDiseases'] as List?;
     if (diseases != null && diseases.isNotEmpty) {
@@ -28,20 +31,30 @@ class Patient {
     return 'stable';
   }
 
-// في patient_page.dart — غير Patient.fromJson:
-factory Patient.fromJson(Map<String, dynamic> json) {
-  final user = json['userId'] ?? {};
-  return Patient(
-    id: json['_id'] ?? '',        // patient profile _id
-    userId: user['_id'] ?? '',    // user _id (للـ chat)
-    name: user['fullName'] ?? 'Unknown',
-    age: user['DOB'] != null
-        ? DateTime.now().year - DateTime.parse(user['DOB']).year
-        : 0,
-    medicationCount: (json['medications'] as List?)?.length ?? 0,
-    status: _getStatus(json),
-  );
-}
+  factory Patient.fromJson(Map<String, dynamic> json) {
+    final user = json['userId'] ?? {};
+
+    // ✅ استخراج الصورة
+    String? imageUrl;
+    final imgField = user['image'];
+    if (imgField is Map) {
+      imageUrl = imgField['secure_url']?.toString();
+    } else if (imgField is String && imgField.isNotEmpty) {
+      imageUrl = imgField;
+    }
+
+    return Patient(
+      id: json['_id'] ?? '',
+      userId: user['_id'] ?? '',
+      name: user['fullName'] ?? 'Unknown',
+      age: user['DOB'] != null
+          ? DateTime.now().year - DateTime.parse(user['DOB']).year
+          : 0,
+      medicationCount: (json['medications'] as List?)?.length ?? 0,
+      status: _getStatus(json), // ✅ شغال دلوقتي
+      imageUrl: imageUrl,
+    );
+  }
 }
 
 class PatientsPage extends StatefulWidget {
@@ -246,17 +259,23 @@ class _PatientsPageState extends State<PatientsPage> {
         children: [
           Row(
             children: [
+              // ✅ الصورة مع fallback للحرف الأول
               CircleAvatar(
                 radius: 26,
                 backgroundColor: AppColors.blueColor.withOpacity(.10),
-                child: Text(
-                  p.name.isNotEmpty ? p.name[0].toUpperCase() : 'P',
-                  style: TextStyle(
-                    color: AppColors.blueColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
+                backgroundImage: (p.imageUrl != null && p.imageUrl!.isNotEmpty)
+                    ? NetworkImage(p.imageUrl!)
+                    : null,
+                child: (p.imageUrl == null || p.imageUrl!.isEmpty)
+                    ? Text(
+                        p.name.isNotEmpty ? p.name[0].toUpperCase() : 'P',
+                        style: TextStyle(
+                          color: AppColors.blueColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -274,8 +293,8 @@ class _PatientsPageState extends State<PatientsPage> {
                     const SizedBox(height: 4),
                     Text(
                       'Age ${p.age} • ${p.medicationCount} medications',
-                      style: TextStyle(
-                          color: Colors.grey.shade600, fontSize: 13),
+                      style:
+                          TextStyle(color: Colors.grey.shade600, fontSize: 13),
                     ),
                   ],
                 ),
@@ -499,7 +518,6 @@ class _PatientsPageState extends State<PatientsPage> {
                         ],
                       ),
                     ),
-                    // زر Refresh
                     IconButton(
                       onPressed: loadPatients,
                       icon: const Icon(Icons.refresh, color: Colors.white),
@@ -523,7 +541,8 @@ class _PatientsPageState extends State<PatientsPage> {
                               Text(
                                 'Failed to load patients',
                                 style: TextStyle(
-                                    fontSize: 16, color: Colors.grey.shade700),
+                                    fontSize: 16,
+                                    color: Colors.grey.shade700),
                               ),
                               const SizedBox(height: 12),
                               ElevatedButton.icon(
@@ -539,7 +558,8 @@ class _PatientsPageState extends State<PatientsPage> {
                           ),
                         )
                       : SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                          padding:
+                              const EdgeInsets.fromLTRB(16, 8, 16, 16),
                           child: Column(
                             children: [
                               Row(
@@ -571,7 +591,8 @@ class _PatientsPageState extends State<PatientsPage> {
                               const SizedBox(height: 16),
                               allPatients.isEmpty
                                   ? Padding(
-                                      padding: const EdgeInsets.only(top: 60),
+                                      padding:
+                                          const EdgeInsets.only(top: 60),
                                       child: Column(
                                         children: [
                                           Icon(Icons.people_outline,
@@ -591,23 +612,26 @@ class _PatientsPageState extends State<PatientsPage> {
                                     )
                                   : filteredPatients.isEmpty
                                       ? Padding(
-                                          padding:
-                                              const EdgeInsets.only(top: 40),
+                                          padding: const EdgeInsets.only(
+                                              top: 40),
                                           child: Center(
                                             child: Text(
                                               'No patients match your search',
                                               style: TextStyle(
-                                                color: Colors.grey.shade600,
+                                                color:
+                                                    Colors.grey.shade600,
                                                 fontSize: 15,
                                               ),
                                             ),
                                           ),
                                         )
                                       : ListView.builder(
+                                        reverse: true,
                                           shrinkWrap: true,
                                           physics:
                                               const NeverScrollableScrollPhysics(),
-                                          itemCount: filteredPatients.length,
+                                          itemCount:
+                                              filteredPatients.length,
                                           itemBuilder: (context, index) =>
                                               buildPatientCard(
                                                   filteredPatients[index]),

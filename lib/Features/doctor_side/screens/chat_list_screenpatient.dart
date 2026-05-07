@@ -1,10 +1,7 @@
-
-
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/Features/doctor_side/chats_doctor/chat_detailsPatient.dart' hide AppColors;
-import 'package:flutter_application_2/Features/patient_side/chats/view/chat_details_screen.dart';
+import 'package:flutter_application_2/Features/doctor_side/chats_doctor/chat_detailsPatient.dart'
+    hide AppColors;
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,6 +13,7 @@ class DoctorChatItem {
   final String name;
   final String specialty;
   final String? imageUrl;
+  final Map<String, dynamic> rawData; // ✅ مضاف
   String lastMessage;
   String lastMessageTime;
   int unreadCount;
@@ -25,6 +23,7 @@ class DoctorChatItem {
     required this.name,
     required this.specialty,
     this.imageUrl,
+    required this.rawData, // ✅ مضاف
     this.lastMessage = '',
     this.lastMessageTime = '',
     this.unreadCount = 0,
@@ -64,7 +63,6 @@ class _ChatsListScreenPatientState extends State<ChatsListScreenPatient> {
 
   @override
   void dispose() {
-    // _previewSocket?.disconnect();
     _searchController.dispose();
     super.dispose();
   }
@@ -79,7 +77,8 @@ class _ChatsListScreenPatientState extends State<ChatsListScreenPatient> {
     try {
       final data = await ApiService.getmydoctors();
 
-      final List<DoctorChatItem> loaded = (data as List).map<DoctorChatItem>((doc) {
+      final List<DoctorChatItem> loaded =
+          (data as List).map<DoctorChatItem>((doc) {
         String? imageUrl;
         final imgField = doc['userId']?['image'];
         if (imgField is Map) {
@@ -89,11 +88,11 @@ class _ChatsListScreenPatientState extends State<ChatsListScreenPatient> {
         }
 
         return DoctorChatItem(
-                             userId: doc['userId']?['_id'] ?? 'Unknown',
-
+          userId: doc['userId']?['_id'] ?? 'Unknown',
           name: doc['userId']?['fullName']?.toString() ?? 'Unknown',
           specialty: doc['specialization']?.toString() ?? 'Doctor',
           imageUrl: imageUrl,
+          rawData: Map<String, dynamic>.from(doc), // ✅ مضاف
         );
       }).toList();
 
@@ -120,7 +119,7 @@ class _ChatsListScreenPatientState extends State<ChatsListScreenPatient> {
       'https://medpal-production-01b6.up.railway.app/chat',
       IO.OptionBuilder()
           .setTransports(['websocket', 'polling'])
-          .setExtraHeaders({'authorization': 'System $token'})
+          .setExtraHeaders({'authorization': 'Bearer $token'})
           .disableAutoConnect()
           .build(),
     );
@@ -144,24 +143,29 @@ class _ChatsListScreenPatientState extends State<ChatsListScreenPatient> {
       final msgs = (data['messages'] as List?) ?? [];
       if (msgs.isEmpty) return;
 
-      final lastMsg = msgs.first;
+      final lastMsg = msgs.last;
       final senderId = lastMsg['senderId']?.toString() ?? '';
       final receiverId = lastMsg['receiverId']?.toString() ?? '';
       final attachment = lastMsg['attachment'];
       String text = lastMsg['message']?.toString() ?? '';
       if (text.isEmpty && attachment != null) {
         final mime = (attachment['mimeType'] ?? '').toString().toLowerCase();
-        if (mime.startsWith('image/')) text = '📷 Photo';
-        else if (mime.startsWith('audio/')) text = '🎤 Voice message';
-        else text = '📎 File';
+        if (mime.startsWith('image/')) {
+          text = '📷 Photo';
+        } else if (mime.startsWith('audio/')) {
+          text = '🎤 Voice message';
+        } else {
+          text = '📎 File';
+        }
       }
       final createdAt = lastMsg['createdAt']?.toString() ?? '';
 
-      final idx = doctors.indexWhere(
-          (d) => d.userId == senderId || d.userId == receiverId);
+      final idx = doctors
+          .indexWhere((d) => d.userId == senderId || d.userId == receiverId);
       if (idx != -1 && mounted) {
         setState(() {
-          doctors[idx].lastMessage = text.isEmpty ? 'Tap to start chatting...' : text;
+          doctors[idx].lastMessage =
+              text.isEmpty ? 'Tap to start chatting...' : 'Tap to start chatting...';
           doctors[idx].lastMessageTime = _formatTime(createdAt);
         });
       }
@@ -175,19 +179,25 @@ class _ChatsListScreenPatientState extends State<ChatsListScreenPatient> {
       String text = data['message']?.toString() ?? '';
       if (text.isEmpty && attachment != null) {
         final mime = (attachment['mimeType'] ?? '').toString().toLowerCase();
-        if (mime.startsWith('image/')) text = '📷 Photo';
-        else if (mime.startsWith('audio/')) text = '🎤 Voice message';
-        else text = '📎 File';
+        if (mime.startsWith('image/')) {
+          text = '📷 Photo';
+        } else if (mime.startsWith('audio/')) {
+          text = '🎤 Voice message';
+        } else {
+          text = '📎 File';
+        }
       }
       final createdAt = data['createdAt']?.toString() ?? '';
 
-      final idx = doctors.indexWhere(
-          (d) => d.userId == senderId || d.userId == receiverId);
+      final idx = doctors
+          .indexWhere((d) => d.userId == senderId || d.userId == receiverId);
       if (idx != -1 && mounted) {
         setState(() {
           doctors[idx].lastMessage = text.isEmpty ? '📎 Media' : text;
           doctors[idx].lastMessageTime = _formatTime(createdAt);
-          if (senderId != _myUserId) doctors[idx].unreadCount += 1;
+          doctors[idx].unreadCount += 1;
+
+          // bubble to top
           final item = doctors.removeAt(idx);
           doctors.insert(0, item);
         });
@@ -195,12 +205,15 @@ class _ChatsListScreenPatientState extends State<ChatsListScreenPatient> {
     });
   }
 
+  // ── Time formatter ────────────────────────────────────────────────────────
   String _formatTime(String? iso) {
-    if (iso == null || iso.isEmpty) return '';
+    if (iso == null || iso.isEmpty) return _nowTime();
     try {
       final dt = DateTime.parse(iso).toLocal();
       final now = DateTime.now();
-      if (dt.day == now.day && dt.month == now.month && dt.year == now.year) {
+      if (dt.day == now.day &&
+          dt.month == now.month &&
+          dt.year == now.year) {
         return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
       } else if (now.difference(dt).inDays == 1) {
         return 'Yesterday';
@@ -208,116 +221,34 @@ class _ChatsListScreenPatientState extends State<ChatsListScreenPatient> {
         return '${dt.day}/${dt.month}';
       }
     } catch (_) {
-      return '';
+      return _nowTime();
     }
   }
 
-  String _getInitials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
+  String _nowTime() {
+    final now = DateTime.now();
+    return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
   }
 
-  // ── BUILD ─────────────────────────────────────────────────────────────────
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7FAFC),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildTopCard(),
-            const SizedBox(height: 12),
-            Expanded(
-              child: isLoading
-                  ? Center(
-                      child: CircularProgressIndicator(
-                          color: AppColors.blueColor))
-                  : RefreshIndicator(
-                      color: AppColors.blueColor,
-                      onRefresh: () async {
-                        setState(() => isLoading = true);
-                        await loadDoctors();
-                      },
-                      child: SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildSearchBox(),
-                            const SizedBox(height: 18),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Messages',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                    color: AppColors.blueColor,
-                                  ),
-                                ),
-                                if (unreadTotal > 0)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.blueColor,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      '$unreadTotal unread',
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            filteredDoctors.isEmpty
-                                ? Center(
-                                    child: Padding(
-                                      padding:
-                                          const EdgeInsets.only(top: 60),
-                                      child: Column(
-                                        children: [
-                                          Icon(Icons.chat_bubble_outline,
-                                              size: 56,
-                                              color: Colors.grey.shade300),
-                                          const SizedBox(height: 12),
-                                          Text(
-                                            searchQuery.isNotEmpty
-                                                ? 'No results for "$searchQuery"'
-                                                : 'No doctors yet',
-                                            style: TextStyle(
-                                                color: Colors.grey.shade500,
-                                                fontSize: 15),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  )
-                                : ListView.separated(
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    itemCount: filteredDoctors.length,
-                                    separatorBuilder: (_, __) =>
-                                        const SizedBox(height: 10),
-                                    itemBuilder: (context, index) {
-                                      final doctor = filteredDoctors[index];
-                                      return _buildChatTile(doctor);
-                                    },
-                                  ),
-                          ],
-                        ),
-                      ),
-                    ),
-            ),
-          ],
+  // ── Initials avatar ───────────────────────────────────────────────────────
+  Widget _buildInitialsAvatar(String name) {
+    final parts = name.trim().split(' ').where((e) => e.isNotEmpty).toList();
+    String initials = parts.isEmpty
+        ? '?'
+        : parts.length == 1
+            ? parts[0][0].toUpperCase()
+            : '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+
+    return Container(
+      color: AppColors.blueColor.withOpacity(.12),
+      child: Center(
+        child: Text(
+          initials,
+          style: TextStyle(
+            color: AppColors.blueColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
       ),
     );
@@ -359,8 +290,8 @@ class _ChatsListScreenPatientState extends State<ChatsListScreenPatient> {
               ),
               Text(
                 '${doctors.length} doctor${doctors.length == 1 ? '' : 's'}',
-                style: const TextStyle(
-                    color: Colors.white70, fontSize: 12),
+                style:
+                    const TextStyle(color: Colors.white70, fontSize: 12),
               ),
             ],
           ),
@@ -429,6 +360,8 @@ class _ChatsListScreenPatientState extends State<ChatsListScreenPatient> {
             builder: (_) => ChatsPageDoctor(
               doctorName: doctor.name,
               chatId: doctor.userId,
+              patientImageUrl: doctor.imageUrl,
+              doctorRawData: doctor.rawData, // ✅ مضاف
             ),
           ),
         );
@@ -455,45 +388,26 @@ class _ChatsListScreenPatientState extends State<ChatsListScreenPatient> {
         child: Row(
           children: [
             // ── Avatar ──────────────────────────────────────────────────
-            Stack(
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppColors.blueColor.withOpacity(.2),
-                      width: 2,
-                    ),
-                  ),
-                  child: ClipOval(
-                    child: hasImage
-                        ? Image.network(
-                            doctor.imageUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                _buildInitialsAvatar(doctor.name),
-                          )
-                        : _buildInitialsAvatar(doctor.name),
-                  ),
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppColors.blueColor.withOpacity(.2),
+                  width: 2,
                 ),
-                // Online dot
-                Positioned(
-                  bottom: 2,
-                  right: 2,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4CAF50),
-                      shape: BoxShape.circle,
-                      border:
-                          Border.all(color: Colors.white, width: 2),
-                    ),
-                  ),
-                ),
-              ],
+              ),
+              child: ClipOval(
+                child: hasImage
+                    ? Image.network(
+                        doctor.imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            _buildInitialsAvatar(doctor.name),
+                      )
+                    : _buildInitialsAvatar(doctor.name),
+              ),
             ),
             const SizedBox(width: 12),
             // ── Info ────────────────────────────────────────────────────
@@ -551,32 +465,30 @@ class _ChatsListScreenPatientState extends State<ChatsListScreenPatient> {
                     fontSize: 11,
                     color: hasUnread
                         ? AppColors.blueColor
-                        : Colors.grey.shade400,
-                    fontWeight: hasUnread
-                        ? FontWeight.w700
-                        : FontWeight.normal,
+                        : Colors.grey.shade500,
+                    fontWeight:
+                        hasUnread ? FontWeight.w700 : FontWeight.normal,
                   ),
                 ),
                 const SizedBox(height: 6),
                 if (hasUnread)
                   Container(
-                    padding:  EdgeInsets.all(5),
-                    decoration:  BoxDecoration(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
                       color: AppColors.blueColor,
                       shape: BoxShape.circle,
                     ),
-                    child: Text(
-                      '${doctor.unreadCount}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
+                    child: Center(
+                      child: Text(
+                        '${doctor.unreadCount}',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
-                  )
-                else
-                  const Icon(Icons.chevron_right,
-                      color: Color(0xFFD1D5DB), size: 18),
+                  ),
               ],
             ),
           ],
@@ -585,17 +497,112 @@ class _ChatsListScreenPatientState extends State<ChatsListScreenPatient> {
     );
   }
 
-  Widget _buildInitialsAvatar(String name) {
-    return Container(
-      color: AppColors.blueColor.withOpacity(.12),
-      child: Center(
-        child: Text(
-          _getInitials(name),
-          style: TextStyle(
-            color: AppColors.blueColor,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
+  // ── BUILD ─────────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7FAFC),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildTopCard(),
+            const SizedBox(height: 12),
+            Expanded(
+              child: isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                          color: AppColors.blueColor))
+                  : RefreshIndicator(
+                      color: AppColors.blueColor,
+                      onRefresh: () async {
+                        setState(() => isLoading = true);
+                        await loadDoctors();
+                      },
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding:
+                            const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSearchBox(),
+                            const SizedBox(height: 18),
+                            Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Messages',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    color: AppColors.blueColor,
+                                  ),
+                                ),
+                                if (unreadTotal > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.blueColor,
+                                      borderRadius:
+                                          BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      '$unreadTotal unread',
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            filteredDoctors.isEmpty
+                                ? Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(
+                                          top: 60),
+                                      child: Column(
+                                        children: [
+                                          Icon(
+                                            Icons.chat_bubble_outline,
+                                            size: 60,
+                                            color: Colors.grey.shade300,
+                                          ),
+                                          const SizedBox(height: 16),
+                                          Text(
+                                            searchQuery.isNotEmpty
+                                                ? 'No results for "$searchQuery"'
+                                                : 'No doctors yet',
+                                            style: TextStyle(
+                                                color: Colors.grey.shade500,
+                                                fontSize: 15),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                : ListView.separated(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    itemCount: filteredDoctors.length,
+                                    separatorBuilder: (_, __) =>
+                                        const SizedBox(height: 10),
+                                    itemBuilder: (context, index) {
+                                      final doctor =
+                                          filteredDoctors[index];
+                                      return _buildChatTile(doctor);
+                                    },
+                                  ),
+                          ],
+                        ),
+                      ),
+                    ),
+            ),
+          ],
         ),
       ),
     );

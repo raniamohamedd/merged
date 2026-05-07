@@ -645,6 +645,8 @@ class _ChatsListScreenDoctorState extends State<ChatsListScreenDoctor> {
                             )
                           else
                             ListView.builder(
+                                reverse: true,
+
                               itemCount: filteredPatients.length,
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),

@@ -675,6 +675,7 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
     return messages;
   }
 
+  // ── HEADER ────────────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       padding: EdgeInsets.only(

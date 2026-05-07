@@ -4,7 +4,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/services/socket_service.dart';
-import 'package:flutter_application_2/Features/doctor_side/screens/patient_detailsdoc.dart';
+import 'package:flutter_application_2/Features/doctor_side/screens/doctorsProfile.dart'; // ✅
+import 'package:flutter_application_2/Features/patient_side/search/search_screen.dart'; // ✅
 import 'package:image_picker/image_picker.dart';
 import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,12 +14,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
-// ─── Enums ──────────────────────────────────────────────────────────────────
 enum MessageType { text, image, audio, file }
 
 late SocketService chatService;
 
-// ─── Model ──────────────────────────────────────────────────────────────────
 class ChatMessage {
   final String text;
   final bool isMe;
@@ -45,7 +44,6 @@ class ChatMessage {
   });
 }
 
-// ─── Colors ─────────────────────────────────────────────────────────────────
 class AppColors {
   static const blueColor = Color(0xFF1976D2);
   static const whiteColor = Colors.white;
@@ -82,7 +80,6 @@ String _dateLabel(DateTime dt) {
   return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
 }
 
-// ─── Upload Helper ───────────────────────────────────────────────────────────
 Future<Map<String, dynamic>?> _uploadAndGetResponse(
     File file, String token, String receiverId) async {
   try {
@@ -134,7 +131,6 @@ Future<Map<String, dynamic>?> _uploadAndGetResponse(
   }
 }
 
-
 MessageType _parseMessageType(dynamic val) {
   final v = (val ?? '').toString().toLowerCase();
   if (v.contains('image')) return MessageType.image;
@@ -148,13 +144,18 @@ MessageType _parseMessageTypeFromMsg(Map<String, dynamic> msg) {
   if (attachment != null) {
     final mime = (attachment['mimeType'] ?? '').toString().toLowerCase();
     final fileName = (attachment['fileName'] ?? '').toString().toLowerCase();
-    if (mime.startsWith('image/') || fileName.endsWith('.jpg') ||
-        fileName.endsWith('.jpeg') || fileName.endsWith('.png') ||
-        fileName.endsWith('.gif') || fileName.endsWith('.webp')) {
+    if (mime.startsWith('image/') ||
+        fileName.endsWith('.jpg') ||
+        fileName.endsWith('.jpeg') ||
+        fileName.endsWith('.png') ||
+        fileName.endsWith('.gif') ||
+        fileName.endsWith('.webp')) {
       return MessageType.image;
     }
-    if (mime.startsWith('audio/') || fileName.endsWith('.m4a') ||
-        fileName.endsWith('.mp3') || fileName.endsWith('.aac') ||
+    if (mime.startsWith('audio/') ||
+        fileName.endsWith('.m4a') ||
+        fileName.endsWith('.mp3') ||
+        fileName.endsWith('.aac') ||
         fileName.endsWith('.webm')) {
       return MessageType.audio;
     }
@@ -162,12 +163,12 @@ MessageType _parseMessageTypeFromMsg(Map<String, dynamic> msg) {
   return _parseMessageType(msg['messageType'] ?? msg['type']);
 }
 
-// ─── Screen ─────────────────────────────────────────────────────────────────
 class ChatsPageDoctor extends StatefulWidget {
   final String doctorName;
   final String chatId;
   final String? patientImageUrl;
   final String? patientProfileId;
+  final Map<String, dynamic>? doctorRawData; // ✅ الإضافة الوحيدة
 
   const ChatsPageDoctor({
     super.key,
@@ -175,6 +176,7 @@ class ChatsPageDoctor extends StatefulWidget {
     required this.chatId,
     this.patientImageUrl,
     this.patientProfileId,
+    this.doctorRawData, // ✅
   });
 
   @override
@@ -199,7 +201,6 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
   String get receiverId => widget.chatId;
   final List<ChatMessage> messages = [];
 
-  // ── init socket ────────────────────────────────────────────────────────────
   Future<void> _initSocket() async {
     final prefs = await SharedPreferences.getInstance();
     _accessToken = prefs.getString("accessToken") ?? "";
@@ -213,12 +214,8 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
 
     chatService.onMessage((msg) {
       if (!mounted) return;
-
       final senderId = msg['senderId']?.toString() ?? '';
-
-      // ✅ تجاهل رسائلي أنا — اتضافت محلياً بالفعل
       if (senderId == myUserId) return;
-
       final dt = _parseDate(msg['createdAt']);
       final msgType = _parseMessageTypeFromMsg(msg);
       final attachment = msg['attachment'];
@@ -231,12 +228,8 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
             type: msgType,
             time: _formatTime(dt),
             rawTime: dt,
-            fileUrl: attachment != null
-                ? attachment['secure_url']
-                : msg['fileUrl'],
-            fileName: attachment != null
-                ? attachment['fileName']
-                : msg['fileName'],
+            fileUrl: attachment != null ? attachment['secure_url'] : msg['fileUrl'],
+            fileName: attachment != null ? attachment['fileName'] : msg['fileName'],
             senderId: senderId,
           ),
         );
@@ -257,10 +250,8 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
           type: msgType,
           time: _formatTime(dt),
           rawTime: dt,
-          fileUrl:
-              attachment != null ? attachment['secure_url'] : m['fileUrl'],
-          fileName:
-              attachment != null ? attachment['fileName'] : m['fileName'],
+          fileUrl: attachment != null ? attachment['secure_url'] : m['fileUrl'],
+          fileName: attachment != null ? attachment['fileName'] : m['fileName'],
           senderId: m['senderId'],
         ));
       }
@@ -292,14 +283,12 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
 
   @override
   void dispose() {
-    // chatService.disconnect();
     _scrollController.dispose();
     _audioPlayer.dispose();
     _audioRecorder.dispose();
     super.dispose();
   }
 
-  // ── SEND TEXT ─────────────────────────────────────────────────────────────
   void _sendTextMessage(String text) {
     if (text.trim().isEmpty) return;
     chatService.sendMessage(receiverId: receiverId, message: text);
@@ -318,8 +307,6 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
     });
   }
 
-  // ── SEND MEDIA ────────────────────────────────────────────────────────────
-  // ✅ Upload endpoint already saves the message — no extra socket emit needed
   Future<void> _sendMediaMessage({
     required File file,
     required MessageType type,
@@ -333,17 +320,13 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
         _showSnack('Upload failed. Check your connection.');
         return;
       }
-
-      final url = uploadResponse['attachment']?['secure_url']
-          ?? uploadResponse['secure_url']
-          ?? uploadResponse['url'];
-
+      final url = uploadResponse['attachment']?['secure_url'] ??
+          uploadResponse['secure_url'] ??
+          uploadResponse['url'];
       if (url == null) {
         _showSnack('Upload failed: no URL returned.');
         return;
       }
-
-      // ✅ detect real type from mimeType
       final mime = (uploadResponse['attachment']?['mimeType'] ?? '').toString().toLowerCase();
       final fName = (uploadResponse['attachment']?['fileName'] ?? '').toString().toLowerCase();
       MessageType realType;
@@ -356,99 +339,57 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
       } else {
         realType = type;
       }
-
-      final resolvedName = uploadResponse['attachment']?['fileName']
-          ?? fileName
-          ?? file.path.split('/').last;
-
+      final resolvedName = uploadResponse['attachment']?['fileName'] ?? fileName ?? 'file';
       final now = DateTime.now();
       setState(() {
         messages.insert(
           0,
           ChatMessage(
-            text: resolvedName,
+            text: '',
             isMe: true,
             type: realType,
             time: _formatTime(now),
             rawTime: now,
             filePath: file.path,
-            fileUrl: url,
+            fileUrl: url.toString(),
             fileName: resolvedName,
           ),
         );
       });
     } catch (e) {
-      _showSnack('Error sending media: $e');
+      _showSnack('Error: $e');
     } finally {
-      if (mounted) setState(() => _isSendingMedia = false);
+      setState(() => _isSendingMedia = false);
     }
   }
 
-  String _typeLabel(MessageType t) {
-    switch (t) {
-      case MessageType.image:
-        return '📷 Image';
-      case MessageType.audio:
-        return '🎤 Voice message';
-      case MessageType.file:
-        return '📎 File';
-      default:
-        return '';
-    }
-  }
-
-  Future<void> openUrl(String url) async {
-    final uri = Uri.parse(url);
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      debugPrint("URL launch error: $e");
-    }
-  }
-
-  // ── PICK IMAGE ────────────────────────────────────────────────────────────
   Future<void> _pickImageFromGallery() async {
-    final image = await _picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 80);
-    if (image == null) return;
-    await _sendMediaMessage(file: File(image.path), type: MessageType.image);
+    final f = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (f == null) return;
+    await _sendMediaMessage(file: File(f.path), type: MessageType.image, fileName: f.name);
   }
 
   Future<void> _captureImageFromCamera() async {
-    final image = await _picker.pickImage(
-        source: ImageSource.camera, imageQuality: 80);
-    if (image == null) return;
-    await _sendMediaMessage(file: File(image.path), type: MessageType.image);
+    final f = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+    if (f == null) return;
+    await _sendMediaMessage(file: File(f.path), type: MessageType.image, fileName: f.name);
   }
 
-  // ── PICK FILE ─────────────────────────────────────────────────────────────
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'xlsx', 'pptx'],
-    );
-    if (result == null) return;
+    final result = await FilePicker.platform.pickFiles();
+    if (result == null || result.files.isEmpty) return;
     final f = result.files.first;
     if (f.path == null) return;
-    await _sendMediaMessage(
-      file: File(f.path!),
-      type: MessageType.file,
-      fileName: f.name,
-    );
+    await _sendMediaMessage(file: File(f.path!), type: MessageType.file, fileName: f.name);
   }
 
-  // ── RECORDING ─────────────────────────────────────────────────────────────
   Future<void> _startRecording() async {
     final hasPermission = await _audioRecorder.hasPermission();
     if (!hasPermission) return;
     final dir = await getTemporaryDirectory();
-    final path =
-        '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
     await _audioRecorder.start(const RecordConfig(), path: path);
-    setState(() {
-      _isRecording = true;
-      _recordSeconds = 0;
-    });
+    setState(() { _isRecording = true; _recordSeconds = 0; });
     _tickRecordTimer();
   }
 
@@ -461,35 +402,21 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
 
   Future<void> _stopRecording() async {
     final path = await _audioRecorder.stop();
-    setState(() {
-      _isRecording = false;
-      _recordSeconds = 0;
-    });
+    setState(() { _isRecording = false; _recordSeconds = 0; });
     if (path != null && File(path).existsSync()) {
-      await _sendMediaMessage(
-        file: File(path),
-        type: MessageType.audio,
-        fileName: 'voice_message.m4a',
-      );
+      await _sendMediaMessage(file: File(path), type: MessageType.audio, fileName: 'voice_message.m4a');
     }
   }
 
   Future<void> _cancelRecording() async {
     await _audioRecorder.stop();
-    setState(() {
-      _isRecording = false;
-      _recordSeconds = 0;
-    });
+    setState(() { _isRecording = false; _recordSeconds = 0; });
   }
 
-  // ── PLAY AUDIO ────────────────────────────────────────────────────────────
   Future<void> _toggleAudio(ChatMessage msg) async {
-    final source =
-        msg.filePath != null && File(msg.filePath!).existsSync()
-            ? msg.filePath!
-            : msg.fileUrl;
+    final source = msg.filePath != null && File(msg.filePath!).existsSync()
+        ? msg.filePath! : msg.fileUrl;
     if (source == null) return;
-
     if (_currentlyPlayingPath == source && _isPlayingAudio) {
       await _audioPlayer.pause();
       setState(() => _isPlayingAudio = false);
@@ -500,10 +427,7 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
       } else if (msg.fileUrl != null) {
         await _audioPlayer.play(UrlSource(msg.fileUrl!));
       }
-      setState(() {
-        _currentlyPlayingPath = source;
-        _isPlayingAudio = true;
-      });
+      setState(() { _currentlyPlayingPath = source; _isPlayingAudio = true; });
     }
   }
 
@@ -514,33 +438,33 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
 
   void _showSnack(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   String _formatRecordTime(int s) =>
       '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
 
-  // ── Patient avatar ─────────────────────────────────────────────────────────
+  // ✅ التعديل الوحيد: ضغط الصورة → DoctorPublicProfileScreen
   Widget _buildPatientAvatar({double radius = 20}) {
     final imageUrl = widget.patientImageUrl;
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
     return GestureDetector(
       onTap: () {
-        final profileId = widget.patientProfileId ?? receiverId;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) => PatientDetailsPage(patientId: profileId)),
-        );
+        if (widget.doctorRawData != null) {
+          final doctor = Doctor.fromJson(widget.doctorRawData!);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => DoctorPublicProfileScreen(doctor: doctor),
+            ),
+          );
+        }
       },
       child: CircleAvatar(
         radius: radius,
         backgroundColor: Colors.white24,
         backgroundImage: hasImage ? NetworkImage(imageUrl) : null,
-        child: !hasImage
-            ? Icon(Icons.person, color: Colors.white, size: radius)
-            : null,
+        child: !hasImage ? Icon(Icons.person, color: Colors.white, size: radius) : null,
       ),
     );
   }
@@ -557,13 +481,11 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
           ),
           body: Center(
             child: InteractiveViewer(
-              child: msg.filePath != null &&
-                      File(msg.filePath!).existsSync()
+              child: msg.filePath != null && File(msg.filePath!).existsSync()
                   ? Image.file(File(msg.filePath!))
                   : msg.fileUrl != null
                       ? Image.network(msg.fileUrl!)
-                      : const Icon(Icons.broken_image,
-                          color: Colors.white, size: 80),
+                      : const Icon(Icons.broken_image, color: Colors.white, size: 80),
             ),
           ),
         ),
@@ -571,7 +493,191 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
     );
   }
 
-  // ── BUILD ─────────────────────────────────────────────────────────────────
+  Widget _buildHeader() {
+    return Container(
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 8,
+        bottom: 12,
+        left: 8,
+        right: 8,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.blueColor,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(24),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+          const SizedBox(width: 10),
+          _buildPatientAvatar(radius: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.doctorName,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                Row(children: [
+                  Container(
+                    width: 7, height: 7,
+                    decoration: const BoxDecoration(color: Color(0xFF69F0AE), shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 4),
+                  const Text('Online', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                ]),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: _makePhoneCall,
+            icon: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.call_rounded, color: Colors.white, size: 20),
+            ),
+            padding: EdgeInsets.zero,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateDivider(String label) {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(12)),
+        child: Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+      ),
+    );
+  }
+
+  Widget _buildMessage(ChatMessage msg) {
+    final isMe = msg.isMe;
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
+        decoration: BoxDecoration(
+          color: isMe ? AppColors.chatBubbleMe : AppColors.chatBubbleOther,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(isMe ? 18 : 4),
+            bottomRight: Radius.circular(isMe ? 4 : 18),
+          ),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(.07), blurRadius: 6, offset: const Offset(0, 2))],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildMessageContent(msg),
+            const SizedBox(height: 4),
+            Text(msg.time, style: TextStyle(fontSize: 10, color: isMe ? Colors.white60 : Colors.black38)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageContent(ChatMessage msg) {
+    final isMe = msg.isMe;
+    switch (msg.type) {
+      case MessageType.image:
+        final src = msg.filePath != null && File(msg.filePath!).existsSync()
+            ? FileImage(File(msg.filePath!)) as ImageProvider
+            : (msg.fileUrl != null ? NetworkImage(msg.fileUrl!) : null);
+        return GestureDetector(
+          onTap: () => _viewFullImage(msg),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: src != null
+                ? Image(image: src, width: 200, height: 160, fit: BoxFit.cover)
+                : const Icon(Icons.image_not_supported, color: Colors.grey),
+          ),
+        );
+
+      case MessageType.audio:
+        final isThisPlaying = _currentlyPlayingPath != null &&
+            (_currentlyPlayingPath == msg.filePath || _currentlyPlayingPath == msg.fileUrl) &&
+            _isPlayingAudio;
+        return GestureDetector(
+          onTap: () => _toggleAudio(msg),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isThisPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                color: isMe ? Colors.white : AppColors.blueColor,
+                size: 32,
+              ),
+              const SizedBox(width: 8),
+              Text('Voice message',
+                  style: TextStyle(color: isMe ? Colors.white : Colors.black87, fontSize: 14)),
+            ],
+          ),
+        );
+
+      case MessageType.file:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.insert_drive_file, color: isMe ? Colors.white : AppColors.blueColor),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                msg.fileName ?? 'File',
+                style: TextStyle(color: isMe ? Colors.white : Colors.black87, decoration: TextDecoration.underline),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        );
+
+      default:
+        return Text(msg.text,
+            style: TextStyle(color: isMe ? Colors.white : Colors.black87, fontSize: 15));
+    }
+  }
+
+  Widget _buildRecordingBar() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.red.shade200),
+      ),
+      child: Row(
+        children: [
+          _PulseIcon(),
+          const SizedBox(width: 8),
+          Text('Recording ${_formatRecordTime(_recordSeconds)}',
+              style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+          const Spacer(),
+          IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: _cancelRecording, padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+          const SizedBox(width: 8),
+          IconButton(icon: const Icon(Icons.stop_circle, color: Colors.green, size: 28), onPressed: _stopRecording, padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -580,16 +686,12 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
         children: [
           _buildHeader(),
           if (_isSendingMedia)
-            const LinearProgressIndicator(
-              backgroundColor: Color(0xFFE3F0FF),
-              color: AppColors.blueColor,
-            ),
+            const LinearProgressIndicator(backgroundColor: Color(0xFFE3F0FF), color: AppColors.blueColor),
           Expanded(
             child: ListView.builder(
               reverse: true,
               controller: _scrollController,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               itemCount: _buildItems().length,
               itemBuilder: (_, i) {
                 final item = _buildItems()[i];
@@ -612,418 +714,41 @@ class _ChatsPageDoctorState extends State<ChatsPageDoctor>
   }
 
   List<dynamic> _buildItems() {
-    
-  return messages;
-  }
-
-  // ── HEADER ────────────────────────────────────────────────────────────────
-  Widget _buildHeader() {
-    return Container(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 8,
-        bottom: 12,
-        left: 8,
-        right: 8,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.blueColor,
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_ios_new,
-                color: Colors.white, size: 18),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-          const SizedBox(width: 10),
-          _buildPatientAvatar(radius: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.doctorName,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16)),
-                Row(children: [
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                        color: Color(0xFF69F0AE), shape: BoxShape.circle),
-                  ),
-                  const SizedBox(width: 4),
-                  const Text('Online',
-                      style: TextStyle(color: Colors.white70, fontSize: 12)),
-                ]),
-              ],
-            ),
-          ),
-          IconButton(
-            onPressed: _makePhoneCall,
-            icon: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.call_rounded,
-                  color: Colors.white, size: 20),
-            ),
-            padding: EdgeInsets.zero,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDateDivider(String label) {
-    return Center(
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.black12,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(label,
-            style:
-                const TextStyle(fontSize: 12, color: Colors.black54)),
-      ),
-    );
-  }
-
-  // ── MESSAGE BUBBLE ────────────────────────────────────────────────────────
-  Widget _buildMessage(ChatMessage msg) {
-    final isMe = msg.isMe;
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: EdgeInsets.only(
-          left: isMe ? 60 : 0,
-          right: isMe ? 12 : 60,
-          top: 3,
-          bottom: 3,
-        ),
-        constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.72),
-        decoration: BoxDecoration(
-          color: isMe
-              ? AppColors.chatBubbleMe
-              : AppColors.chatBubbleOther,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: Radius.circular(isMe ? 18 : 4),
-            bottomRight: Radius.circular(isMe ? 4 : 18),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(.07),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            )
-          ],
-        ),
-        padding: _msgPadding(msg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildMessageContent(msg),
-            const SizedBox(height: 3),
-            Text(
-              msg.time,
-              style: TextStyle(
-                fontSize: 10,
-                color: isMe ? Colors.white60 : Colors.black38,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  EdgeInsets _msgPadding(ChatMessage msg) {
-    if (msg.type == MessageType.image) {
-      return const EdgeInsets.all(4);
-    }
-    return const EdgeInsets.symmetric(horizontal: 12, vertical: 8);
-  }
-
-  Widget _buildMessageContent(ChatMessage msg) {
-    switch (msg.type) {
-      case MessageType.image:
-        Widget imageWidget;
-        if (msg.filePath != null && File(msg.filePath!).existsSync()) {
-          imageWidget = Image.file(File(msg.filePath!),
-              width: 220, height: 200, fit: BoxFit.cover);
-        } else if (msg.fileUrl != null) {
-          imageWidget = Image.network(
-            msg.fileUrl!,
-            width: 220,
-            height: 200,
-            fit: BoxFit.cover,
-            loadingBuilder: (_, child, progress) => progress == null
-                ? child
-                : const SizedBox(
-                    width: 220,
-                    height: 200,
-                    child: Center(
-                        child: CircularProgressIndicator(strokeWidth: 2))),
-            errorBuilder: (_, __, ___) => const Icon(
-                Icons.broken_image,
-                size: 60,
-                color: Colors.grey),
-          );
-        } else {
-          imageWidget = const Icon(Icons.broken_image,
-              size: 60, color: Colors.grey);
-        }
-        return GestureDetector(
-          onTap: () => _viewFullImage(msg),
-          child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: imageWidget),
-        );
-
-      case MessageType.audio:
-        final source =
-            msg.filePath != null && File(msg.filePath!).existsSync()
-                ? msg.filePath!
-                : msg.fileUrl;
-        final isThisPlaying =
-            _currentlyPlayingPath == source && _isPlayingAudio;
-        return GestureDetector(
-          onTap: source != null ? () => _toggleAudio(msg) : null,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: msg.isMe
-                      ? Colors.white.withOpacity(.25)
-                      : AppColors.blueColor.withOpacity(.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  isThisPlaying
-                      ? Icons.pause_rounded
-                      : Icons.play_arrow_rounded,
-                  color: msg.isMe ? Colors.white : AppColors.blueColor,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 100,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: msg.isMe
-                          ? Colors.white38
-                          : Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    'Voice Message',
-                    style: TextStyle(
-                      color: msg.isMe
-                          ? Colors.white70
-                          : Colors.grey.shade600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-
-      case MessageType.file:
-        return GestureDetector(
-          onTap: () {
-            if (msg.fileUrl != null) openUrl(msg.fileUrl!);
-          },
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: msg.isMe
-                      ? Colors.white.withOpacity(.2)
-                      : AppColors.blueColor.withOpacity(.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.insert_drive_file_rounded,
-                  color: msg.isMe ? Colors.white : AppColors.blueColor,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      msg.fileName ?? msg.text,
-                      style: TextStyle(
-                        color: msg.isMe
-                            ? Colors.white
-                            : Colors.black87,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (msg.fileUrl != null)
-                      Text(
-                        'Tap to open',
-                        style: TextStyle(
-                          color: msg.isMe
-                              ? Colors.white60
-                              : Colors.blue,
-                          fontSize: 11,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-
-      default:
-        return Text(
-          msg.text,
-          style: TextStyle(
-            color: msg.isMe ? Colors.white : Colors.black87,
-            fontSize: 15,
-          ),
-        );
-    }
-  }
-
-  // ── RECORDING BAR ─────────────────────────────────────────────────────────
-  Widget _buildRecordingBar() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.06),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          )
-        ],
-      ),
-      child: Row(
-        children: [
-          _PulseIcon(),
-          const SizedBox(width: 10),
-          Text(
-            '🎤 Recording... ${_formatRecordTime(_recordSeconds)}',
-            style: const TextStyle(
-                color: Color(0xFFE53935),
-                fontWeight: FontWeight.w600,
-                fontSize: 15),
-          ),
-          const Spacer(),
-          GestureDetector(
-            onTap: _cancelRecording,
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.delete_outline,
-                  color: Colors.red, size: 22),
-            ),
-          ),
-          const SizedBox(width: 10),
-          GestureDetector(
-            onTap: _stopRecording,
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.blueColor,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.send_rounded,
-                  color: Colors.white, size: 22),
-            ),
-          ),
-        ],
-      ),
-    );
+   
+    return messages;
   }
 }
 
-// ─── Pulse Icon ────────────────────────────────────────────────────────────────
 class _PulseIcon extends StatefulWidget {
   @override
   State<_PulseIcon> createState() => _PulseIconState();
 }
 
-class _PulseIconState extends State<_PulseIcon>
-    with SingleTickerProviderStateMixin {
+class _PulseIconState extends State<_PulseIcon> with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _anim;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 800))
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))
       ..repeat(reverse: true);
     _anim = Tween(begin: 0.5, end: 1.0).animate(_ctrl);
   }
 
   @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
+  void dispose() { _ctrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
         animation: _anim,
         builder: (_, __) => Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: Color.fromRGBO(229, 57, 53, _anim.value),
-            shape: BoxShape.circle,
-          ),
+          width: 12, height: 12,
+          decoration: BoxDecoration(color: Color.fromRGBO(229, 57, 53, _anim.value), shape: BoxShape.circle),
         ),
       );
 }
 
-// ─── Chat Input ───────────────────────────────────────────────────────────────
 class ChatInput extends StatefulWidget {
   final Function(String) onSend;
   final VoidCallback onPickImage;
@@ -1052,15 +777,11 @@ class _ChatInputState extends State<ChatInput> {
   @override
   void initState() {
     super.initState();
-    _controller.addListener(
-        () => setState(() => _hasText = _controller.text.trim().isNotEmpty));
+    _controller.addListener(() => setState(() => _hasText = _controller.text.trim().isNotEmpty));
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  void dispose() { _controller.dispose(); super.dispose(); }
 
   void _send() {
     if (!_hasText) return;
@@ -1068,21 +789,13 @@ class _ChatInputState extends State<ChatInput> {
     _controller.clear();
   }
 
-  Widget _attachOption(IconData icon, String label, Color color,
-      VoidCallback onTap) {
+  Widget _attachOption(IconData icon, String label, Color color, VoidCallback onTap) {
     return GestureDetector(
-      onTap: () {
-        setState(() => _showAttachMenu = false);
-        onTap();
-      },
+      onTap: () { setState(() => _showAttachMenu = false); onTap(); },
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircleAvatar(
-            radius: 26,
-            backgroundColor: color.withOpacity(.12),
-            child: Icon(icon, color: color, size: 24),
-          ),
+          CircleAvatar(radius: 26, backgroundColor: color.withOpacity(.12), child: Icon(icon, color: color, size: 24)),
           const SizedBox(height: 5),
           Text(label, style: const TextStyle(fontSize: 11)),
         ],
@@ -1102,62 +815,36 @@ class _ChatInputState extends State<ChatInput> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(.08),
-                  blurRadius: 16,
-                  offset: const Offset(0, -2),
-                )
-              ],
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 12, offset: const Offset(0, -4))],
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _attachOption(Icons.photo_library_rounded, 'Gallery',
-                    Colors.purple, widget.onPickImage),
-                _attachOption(Icons.camera_alt_rounded, 'Camera',
-                    Colors.blue, widget.onCamera),
-                _attachOption(Icons.insert_drive_file_rounded, 'File',
-                    Colors.orange, widget.onPickFile),
+                _attachOption(Icons.image_rounded, 'Gallery', Colors.purple, widget.onPickImage),
+                _attachOption(Icons.camera_alt_rounded, 'Camera', Colors.blue, widget.onCamera),
+                _attachOption(Icons.insert_drive_file_rounded, 'File', Colors.orange, widget.onPickFile),
               ],
             ),
           ),
         Container(
-          padding: EdgeInsets.only(
-            left: 12,
-            right: 12,
-            top: 8,
-            bottom: MediaQuery.of(context).padding.bottom + 8,
-          ),
+          padding: EdgeInsets.only(left: 8, right: 8, top: 8, bottom: MediaQuery.of(context).padding.bottom + 8),
           decoration: BoxDecoration(
             color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(.06),
-                blurRadius: 8,
-                offset: const Offset(0, -2),
-              )
-            ],
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(.07), blurRadius: 8, offset: const Offset(0, -2))],
           ),
           child: Row(
             children: [
               GestureDetector(
-                onTap: () =>
-                    setState(() => _showAttachMenu = !_showAttachMenu),
+                onTap: () => setState(() => _showAttachMenu = !_showAttachMenu),
                 child: Container(
-                  width: 38,
-                  height: 38,
+                  width: 38, height: 38,
                   decoration: BoxDecoration(
-                    color: _showAttachMenu
-                        ? AppColors.blueColor.withOpacity(.1)
-                        : Colors.grey.shade100,
+                    color: _showAttachMenu ? AppColors.blueColor.withOpacity(.1) : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     _showAttachMenu ? Icons.close : Icons.attach_file_rounded,
-                    color: _showAttachMenu
-                        ? AppColors.blueColor
-                        : Colors.grey.shade600,
+                    color: _showAttachMenu ? AppColors.blueColor : Colors.grey.shade600,
                     size: 20,
                   ),
                 ),
@@ -1171,12 +858,8 @@ class _ChatInputState extends State<ChatInput> {
                     hintText: 'Type a message...',
                     filled: true,
                     fillColor: Colors.grey.shade100,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
-                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
                   ),
                   onSubmitted: (_) => _send(),
                 ),
@@ -1185,17 +868,9 @@ class _ChatInputState extends State<ChatInput> {
               GestureDetector(
                 onTap: _hasText ? _send : widget.onStartRecord,
                 child: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: AppColors.blueColor,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(
-                    _hasText ? Icons.send_rounded : Icons.mic_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(color: AppColors.blueColor, borderRadius: BorderRadius.circular(14)),
+                  child: Icon(_hasText ? Icons.send_rounded : Icons.mic_rounded, color: Colors.white, size: 20),
                 ),
               ),
             ],
