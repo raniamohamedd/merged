@@ -171,8 +171,10 @@ class _DoctorCard extends StatelessWidget {
         _specialtyIcons[doctor.specialty] ?? Icons.medical_services_rounded;
 
     final raw = doctor.rawData;
-    final imageUrl =
-        raw['userId']?['image']?['secure_url']?.toString() ?? '';
+String imageUrl = raw['userId']?['image']?['secure_url']?.toString() ?? '';
+if (imageUrl.isEmpty) {
+  imageUrl = raw['image']?['secure_url']?.toString() ?? '';
+}
 
     return GestureDetector(
       onTap: () => Navigator.push(

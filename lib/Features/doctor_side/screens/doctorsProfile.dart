@@ -76,9 +76,7 @@ class _DoctorPublicProfileScreenState
                     CircleAvatar(
                       radius: 48,
                       backgroundColor: Colors.white.withOpacity(0.2),
-                      backgroundImage: imageUrl.isNotEmpty
-                          ? NetworkImage(imageUrl)
-                          : null,
+                     backgroundImage: imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
                       child: imageUrl.isEmpty
                           ? const Icon(Icons.person,
                               color: Colors.white, size: 48)
