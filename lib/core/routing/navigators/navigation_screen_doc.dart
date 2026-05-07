@@ -25,7 +25,7 @@ class _NavigationScreenState extends State<NavigationnScreendoc> {
     PatientsPage(), // 1
     ChatsListScreenDoctor(), //2
     // ChatScreen(), // 3
-        MedicationReportsPage(), 
+        DoctorReportScreen(), 
 
     EmergencyCasesPage(),
 

@@ -290,7 +290,28 @@ static Future<void> rejectRequest(String id) async {
 }
 
 
+static Future<List<dynamic>> getMySos() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString("accessToken");
 
+  final response = await http.get(
+    Uri.parse("https://medpal-production-01b6.up.railway.app/sos/my"),
+    headers: {
+      "Authorization": "Bearer $token",
+    },
+  );
+
+  print("MY SOS: ${response.body}");
+
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body);
+    return data["data"] ?? [];
+  } else if (response.statusCode == 404) {
+    return [];
+  } else {
+    throw Exception("Failed to load my SOS");
+  }
+}
 static Future<List<dynamic>> getSos() async {
   final prefs = await SharedPreferences.getInstance();
   final token = prefs.getString("accessToken");
@@ -310,7 +331,35 @@ static Future<List<dynamic>> getSos() async {
   } else {
     throw Exception("Failed to load SOS");
   }
-}static Future<Map<String, dynamic>> addMedication({
+}
+
+
+
+static Future<List<dynamic>> getPendingMedications() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString("accessToken");
+
+  final response = await http.get(
+    Uri.parse("https://medpal-production-01b6.up.railway.app/medication/pending"),
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer $token",
+    },
+  );
+
+  print("PENDING: ${response.statusCode} - ${response.body}");
+
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body);
+    return data["data"] ?? [];
+  } else if (response.statusCode == 404) {
+    return [];
+  } else {
+    throw Exception("Failed to load pending medications");
+  }
+}
+
+static Future<Map<String, dynamic>> addMedication({
   required String medicationName,
   required String dosage,
   required String repeat,
@@ -403,13 +452,52 @@ static Future<List<dynamic>> getMyMedications() async {
     throw Exception(data["message"] ?? "Failed to load medications");
   }
 }
+static Future<Map<String, dynamic>> getPatientReport() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString("accessToken");
 
-static Future<void> takeMedication(String medicationId) async {
+  final response = await http.get(
+    Uri.parse("https://medpal-production-01b6.up.railway.app/medication/report"),
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer $token",
+    },
+  );
+
+  print("REPORT: ${response.statusCode} - ${response.body}");
+
+  if (response.statusCode == 200) {
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  } else {
+    throw Exception("Failed to load report");
+  }
+}
+
+static Future<void> resolveSos(String sosId) async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString("accessToken");
+
+  final response = await http.patch(
+    Uri.parse("https://medpal-production-01b6.up.railway.app/sos/$sosId/resolve"),
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "System $token",
+    },
+  );
+
+  print("RESOLVE SOS: ${response.statusCode} - ${response.body}");
+
+  if (response.statusCode != 200 && response.statusCode != 201) {
+    final data = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+    throw Exception(data["message"] ?? "Failed to resolve SOS");
+  }
+}
+static Future<void> takeMedication(String logId) async {
   final prefs = await SharedPreferences.getInstance();
   final token = prefs.getString("accessToken");
 
   final response = await http.post(
-    Uri.parse("https://medpal-production-01b6.up.railway.app/medication/take/$medicationId"),
+    Uri.parse("https://medpal-production-01b6.up.railway.app/medication/take/$logId"),
     headers: {
       "Content-Type": "application/json",
       "Authorization": "Bearer $token",
@@ -881,6 +969,7 @@ static Future<Map<String, dynamic>> completeSignup({
         "Authorization": "Bearer $token",
       },
     );
+    print(response.body);
 
     final data = jsonDecode(response.body);
 
@@ -890,6 +979,40 @@ static Future<Map<String, dynamic>> completeSignup({
       throw Exception('فشل إرسال طلب الاتصال: ${response.statusCode} - ${response.body}');
     }
   }// ✅ الجديد
+
+
+  static Future<Map<String, dynamic>> getDoctorReport() async {
+  final prefs = await SharedPreferences.getInstance();
+  final String? token = prefs.getString("accessToken");
+
+  final url = Uri.parse(
+    "https://medpal-production-01b6.up.railway.app/doctor/report",
+  );
+
+  final response = await http.get(
+    url,
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "System $token",
+    },
+  );
+
+  final data = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+  print(response.body);
+
+  // ✅ لو 404 = مفيش profile = مش مكتمل، مش error
+  if (response.statusCode == 404) {
+    return {};
+  }
+
+  if (response.statusCode == 200) {
+    return data;
+  } else {
+    throw Exception(
+      data["message"] ?? "Failed to load doc report: ${response.statusCode}",
+    );
+  }
+}
 static Future<Map<String, dynamic>> getPatientProfile() async {
   final prefs = await SharedPreferences.getInstance();
   final String? token = prefs.getString("accessToken");

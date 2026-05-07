@@ -1,862 +1,1906 @@
-import 'dart:io';
-import 'dart:typed_data';
-import 'dart:ui' as ui;
-
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:permission_handler/permission_handler.dart';
 
-// ============================================================
-//  Data Models
-// ============================================================
-
-class _PatientSummary {
-  final String name;
-  final int medicationCount;
-  final String status;
-  final int adherence; // estimated from status
-
-  _PatientSummary({
-    required this.name,
-    required this.medicationCount,
-    required this.status,
-  }) : adherence = status == 'stable'
-            ? 90
-            : status == 'monitoring'
-                ? 75
-                : 60;
-}
-
-class _MedEvent {
-  final String patientName;
-  final String medicationName;
-  final String dosage;
-  final String severity; // low | medium | high (from warningLevel)
-  final String event;    // from medication taken status
-
-  _MedEvent({
-    required this.patientName,
-    required this.medicationName,
-    required this.dosage,
-    required this.severity,
-    required this.event,
-  });
-}
-
-// ============================================================
-//  Page
-// ============================================================
-
-class MedicationReportsPage extends StatefulWidget {
-  const MedicationReportsPage({super.key});
+class DoctorReportScreen extends StatefulWidget {
+  const DoctorReportScreen({super.key});
 
   @override
-  State<MedicationReportsPage> createState() => _MedicationReportsPageState();
+  State<DoctorReportScreen> createState() => _DoctorReportScreenState();
 }
 
-class _MedicationReportsPageState extends State<MedicationReportsPage> {
-  // ── state ──────────────────────────────────────────────────
-  bool isLoading = true;
-  bool isGenerating = false;
-  String errorMessage = '';
+class _DoctorReportScreenState extends State<DoctorReportScreen>
+    with SingleTickerProviderStateMixin {
+  bool _isLoading = true;
+  String? _error;
+  Map<String, dynamic>? _reportData;
 
-  List<_PatientSummary> patients = [];
-  List<_MedEvent> events = [];
+  Map<String, dynamic>? _selectedPatient;
 
-  String selectedPatient = 'all';
-  String selectedLevel = 'all';
+  String _statusFilter = 'all';
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
-  // ── chart capture keys ─────────────────────────────────────
-  final GlobalKey _adherenceKey = GlobalKey();
-  final GlobalKey _pieKey = GlobalKey();
+  late AnimationController _animCtrl;
+  late Animation<double> _fadeAnim;
 
-  // ── lifecycle ──────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _animCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 450));
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _loadReport();
   }
 
-  // ── load real data ─────────────────────────────────────────
-  Future<void> _loadData() async {
-    setState(() {
-      isLoading = true;
-      errorMessage = '';
-    });
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadReport() async {
     try {
-      final response = await ApiService.getPatients();
-      final List rawPatients = response['data'] ?? [];
-
-      final List<_PatientSummary> loaded = [];
-      final List<_MedEvent> loadedEvents = [];
-
-      for (final p in rawPatients) {
-        final user = p['userId'] ?? {};
-        final name = user['fullName'] ?? 'Unknown';
-
-        final diseases = (p['chronicDiseases'] as List?) ?? [];
-        final status =
-            diseases.isNotEmpty ? (diseases[0]['status'] ?? 'stable') : 'stable';
-
-        final medications = (p['medications'] as List?) ?? [];
-
-        loaded.add(_PatientSummary(
-          name: name,
-          medicationCount: medications.length,
-          status: status,
-        ));
-
-        for (final med in medications) {
-          final medName = med['name'] ?? med['medicationName'] ?? 'Unknown';
-          final dosage = med['dosage'] ?? '';
-          final rawWarning = med['warningLevel'] ?? 'low';
-          // map backend values → low/medium/high
-          final severity = _mapWarning(rawWarning);
-          final taken = med['taken'] ?? false;
-          final event = taken ? 'Taken on Time' : 'Missed Dose';
-
-          loadedEvents.add(_MedEvent(
-            patientName: name,
-            medicationName: medName,
-            dosage: dosage,
-            severity: severity,
-            event: event,
-          ));
-        }
-      }
-
       setState(() {
-        patients = loaded;
-        events = loadedEvents;
-        isLoading = false;
+        _isLoading = true;
+        _error = null;
       });
+      _animCtrl.reset();
+      final data = await ApiService.getDoctorReport();
+      setState(() {
+        _reportData = data;
+        _isLoading = false;
+      });
+      _animCtrl.forward();
     } catch (e) {
       setState(() {
-        errorMessage = e.toString();
-        isLoading = false;
+        _error = e.toString();
+        _isLoading = false;
       });
     }
   }
 
-  String _mapWarning(String raw) {
-    switch (raw) {
-      case 'severe':
-        return 'high';
+  // ── helpers ──────────────────────────────────────────────────────────────────
+  Color _statusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'critical':
+        return const Color(0xFFE53935);
       case 'moderate':
-        return 'medium';
+        return const Color(0xFFF57C00);
+      case 'stable':
+        return const Color(0xFF2E7D32);
       default:
-        return 'low';
+        return Colors.grey;
     }
   }
 
-  // ── filtered events ────────────────────────────────────────
-  List<_MedEvent> get filteredEvents {
-    return events.where((e) {
-      final matchPatient =
-          selectedPatient == 'all' || e.patientName == selectedPatient;
-      final matchLevel =
-          selectedLevel == 'all' || e.severity == selectedLevel;
-      return matchPatient && matchLevel;
+  IconData _statusIcon(String status) {
+    switch (status.toLowerCase()) {
+      case 'critical':
+        return Icons.emergency_rounded;
+      case 'moderate':
+        return Icons.warning_amber_rounded;
+      case 'stable':
+        return Icons.check_circle_outline_rounded;
+      default:
+        return Icons.help_outline_rounded;
+    }
+  }
+
+  Color _warningColor(String level) {
+    switch (level.toLowerCase()) {
+      case 'severe':
+        return const Color(0xFFE53935);
+      case 'moderate':
+        return const Color(0xFFF57C00);
+      case 'mild':
+        return const Color(0xFFF9A825);
+      case 'caution':
+        return const Color(0xFFFF8F00);
+      case 'safe':
+        return const Color(0xFF43A047);
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _calcAge(String? dob) {
+    if (dob == null) return '—';
+    try {
+      final birth = DateTime.parse(dob);
+      final age = DateTime.now().difference(birth).inDays ~/ 365;
+      return '$age y';
+    } catch (_) {
+      return '—';
+    }
+  }
+
+  List<Map<String, dynamic>> get _allPatients {
+    return ((_reportData?['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+  }
+
+  List<Map<String, dynamic>> get _filteredPatients {
+    return _allPatients.where((p) {
+      final status =
+          (p['stats'] as Map<String, dynamic>?)?['healthStatus']?.toString() ??
+              '';
+      final name = (p['patientInfo'] as Map<String, dynamic>?)?['fullName']
+              ?.toString()
+              .toLowerCase() ??
+          '';
+      final statusOk =
+          _statusFilter == 'all' || status.toLowerCase() == _statusFilter;
+      final searchOk =
+          _searchQuery.isEmpty || name.contains(_searchQuery.toLowerCase());
+      return statusOk && searchOk;
     }).toList();
   }
 
-  int get highCount => events.where((e) => e.severity == 'high').length;
-  int get mediumCount => events.where((e) => e.severity == 'medium').length;
-  int get lowCount => events.where((e) => e.severity == 'low').length;
-
-  // ── color helpers ──────────────────────────────────────────
-  Color _severityColor(String s) {
-    switch (s) {
-      case 'high':
-        return const Color(0xFFE74C3C);
-      case 'medium':
-        return const Color(0xFFF39C12);
-      default:
-        return const Color(0xFF27AE60);
-    }
+  // ── BUILD ────────────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF0F3F8),
+      body: _isLoading
+          ? _buildLoader()
+          : _error != null
+              ? _buildError()
+              : _selectedPatient != null
+                  ? _buildPatientDetail(_selectedPatient!)
+                  : _buildMainReport(),
+    );
   }
 
-  Color _severityBg(String s) => _severityColor(s).withOpacity(0.10);
-
-  // ── PDF helpers ────────────────────────────────────────────
-  Future<bool> _requestPermission() async {
-    if (Platform.isAndroid) {
-      final s = await Permission.storage.request();
-      if (s.isGranted) return true;
-      return (await Permission.manageExternalStorage.request()).isGranted;
-    }
-    return true;
+  // ── Loader ───────────────────────────────────────────────────────────────────
+  Widget _buildLoader() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircularProgressIndicator(color: AppColors.blueColor),
+          const SizedBox(height: 16),
+          const Text('Loading report…',
+              style: TextStyle(color: Colors.grey, fontSize: 14)),
+        ],
+      ),
+    );
   }
 
-  Future<Uint8List?> _capture(GlobalKey key) async {
-    try {
-      final ctx = key.currentContext;
-      if (ctx == null) return null;
-      final boundary = ctx.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) return null;
-      final img = await boundary.toImage(pixelRatio: 2.5);
-      final bd = await img.toByteData(format: ui.ImageByteFormat.png);
-      return bd?.buffer.asUint8List();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<void> _generatePdf() async {
-    setState(() => isGenerating = true);
-    try {
-      if (!await _requestPermission()) throw Exception('No storage permission');
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      final adherenceImg = await _capture(_adherenceKey);
-      final pieImg = await _capture(_pieKey);
-
-      final pdf = pw.Document();
-
-      pdf.addPage(pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(24),
-        build: (ctx) => [
-          pw.Center(
-            child: pw.Text(
-              'Medication Report',
-              style: pw.TextStyle(
-                  fontSize: 22,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.blue900),
+  // ── Error ────────────────────────────────────────────────────────────────────
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline_rounded,
+                color: Colors.red, size: 54),
+            const SizedBox(height: 16),
+            const Text('Failed to load report',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Colors.black87)),
+            const SizedBox(height: 8),
+            Text(_error ?? '',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey, fontSize: 13)),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.blueColor,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _loadReport,
+              icon: const Icon(Icons.refresh, color: Colors.white),
+              label:
+                  const Text('Retry', style: TextStyle(color: Colors.white)),
             ),
-          ),
-          pw.SizedBox(height: 8),
-          pw.Center(
-            child: pw.Text('Generated by MedPal — ${patients.length} patients',
-                style: pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
-          ),
-          pw.SizedBox(height: 20),
-
-          // Summary row
-          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
-            _pdfStat('Patients', '${patients.length}', PdfColors.blue700),
-            _pdfStat('High Risk Meds', '$highCount', PdfColors.red700),
-            _pdfStat('Moderate', '$mediumCount', PdfColors.orange700),
-            _pdfStat('Low Risk', '$lowCount', PdfColors.green700),
-          ]),
-
-          pw.SizedBox(height: 18),
-          if (adherenceImg != null) ...[
-            _pdfSection('Patient Adherence Overview'),
-            pw.Image(pw.MemoryImage(adherenceImg), height: 180),
-            pw.SizedBox(height: 12),
-          ],
-          if (pieImg != null) ...[
-            _pdfSection('Medication Status Distribution'),
-            pw.Image(pw.MemoryImage(pieImg), height: 180),
-            pw.SizedBox(height: 12),
-          ],
-
-          _pdfSection('Medication Event Log'),
-          pw.TableHelper.fromTextArray(
-            headers: ['Patient', 'Medication', 'Dosage', 'Risk', 'Event'],
-            data: events.take(30).map((e) => [
-              e.patientName,
-              e.medicationName,
-              e.dosage,
-              e.severity.toUpperCase(),
-              e.event,
-            ]).toList(),
-            border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-            headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
-            headerDecoration: const pw.BoxDecoration(color: PdfColors.blue700),
-            cellStyle: const pw.TextStyle(fontSize: 9),
-            cellPadding: const pw.EdgeInsets.all(5),
-          ),
-        ],
-      ));
-
-      final dir = Platform.isAndroid
-          ? Directory('/storage/emulated/0/Download')
-          : await getApplicationDocumentsDirectory();
-      if (!await dir.exists()) await dir.create(recursive: true);
-
-      final file = File('${dir.path}/med_report.pdf');
-      await file.writeAsBytes(await pdf.save());
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('PDF saved: ${file.path}'),
-        backgroundColor: AppColors.blueColor,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-      ));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Error: $e'),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-      ));
-    } finally {
-      if (mounted) setState(() => isGenerating = false);
-    }
-  }
-
-  pw.Widget _pdfStat(String label, String val, PdfColor color) {
-    return pw.Column(children: [
-      pw.Text(label, style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
-      pw.SizedBox(height: 4),
-      pw.Text(val,
-          style: pw.TextStyle(
-              fontSize: 14, fontWeight: pw.FontWeight.bold, color: color)),
-    ]);
-  }
-
-  pw.Widget _pdfSection(String title) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.only(top: 14, bottom: 6),
-      child: pw.Text(title,
-          style: pw.TextStyle(
-              fontSize: 14,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColors.blue800)),
-    );
-  }
-
-  // ── UI helpers ─────────────────────────────────────────────
-  Widget _softCard({required Widget child}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF0F2F5)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 18,
-              offset: const Offset(0, 8))
-        ],
-      ),
-      child: child,
-    );
-  }
-
-  Widget _sectionTitle(String title, IconData icon) {
-    return Row(children: [
-      CircleAvatar(
-        radius: 18,
-        backgroundColor: AppColors.blueColor.withOpacity(0.10),
-        child: Icon(icon, color: AppColors.blueColor, size: 18),
-      ),
-      const SizedBox(width: 10),
-      Text(title,
-          style: const TextStyle(
-              fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
-    ]);
-  }
-
-  Widget _statsCard(
-      {required String title,
-      required String value,
-      required Color color,
-      required IconData icon}) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFF0F2F5)),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                blurRadius: 16,
-                offset: const Offset(0, 6))
           ],
         ),
-        child: Column(children: [
-          CircleAvatar(
-              radius: 18,
-              backgroundColor: color.withOpacity(0.10),
-              child: Icon(icon, color: color, size: 18)),
-          const SizedBox(height: 10),
-          Text(value,
-              style: TextStyle(
-                  color: color, fontWeight: FontWeight.bold, fontSize: 18)),
-          const SizedBox(height: 4),
-          Text(title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500)),
-        ]),
       ),
     );
   }
 
-  // ── adherence bar chart ─────────────────────────────────────
-  Widget _buildAdherenceChart() {
-    final visible = patients.take(8).toList();
-    if (visible.isEmpty) {
-      return const SizedBox(
-          height: 180,
-          child: Center(child: Text('No patient data yet')));
-    }
-    return _softCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _sectionTitle('Patient Adherence', Icons.bar_chart_rounded),
-        const SizedBox(height: 4),
-        Text('Estimated adherence by status',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-        const SizedBox(height: 18),
-        RepaintBoundary(
-          key: _adherenceKey,
-          child: SizedBox(
-            height: 220,
-            child: BarChart(BarChartData(
-              maxY: 100,
-              alignment: BarChartAlignment.spaceAround,
-              gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  horizontalInterval: 20,
-                  getDrawingHorizontalLine: (_) =>
-                      const FlLine(color: Color(0xFFE5E7EB), strokeWidth: 1)),
-              borderData: FlBorderData(show: false),
-              titlesData: FlTitlesData(
-                topTitles:
-                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                rightTitles:
-                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    getTitlesWidget: (value, _) {
-                      final idx = value.toInt();
-                      if (idx < visible.length) {
-                        final parts = visible[idx].name.split(' ');
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(parts[0],
-                              style: const TextStyle(fontSize: 10)),
-                        );
-                      }
-                      return const SizedBox();
-                    },
+  // ── Main Report ──────────────────────────────────────────────────────────────
+  Widget _buildMainReport() {
+    final summary =
+        (_reportData!['summary'] as Map<String, dynamic>?) ?? {};
+
+    return FadeTransition(
+      opacity: _fadeAnim,
+      child: RefreshIndicator(
+        onRefresh: _loadReport,
+        color: AppColors.blueColor,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header card
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 40, 4, 0),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: AppColors.blueColor,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.blueColor.withOpacity(.18),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(.18),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: const Icon(Icons.book,
+                            color: Colors.white, size: 28),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Doctor Report',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Sorted by most recent first',
+                              style:
+                                  TextStyle(color: Colors.white70, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 32,
-                      interval: 20,
-                      getTitlesWidget: (v, _) => Text(v.toInt().toString(),
-                          style: const TextStyle(fontSize: 10))),
-                ),
               ),
-              barGroups: visible.asMap().entries.map((e) {
-                final p = e.value;
-                final color = p.status == 'stable'
-                    ? const Color(0xFF27AE60)
-                    : p.status == 'monitoring'
-                        ? const Color(0xFFF39C12)
-                        : const Color(0xFFE74C3C);
-                return BarChartGroupData(
-                  x: e.key,
-                  barRods: [
-                    BarChartRodData(
-                      toY: p.adherence.toDouble(),
-                      width: 18,
-                      borderRadius: BorderRadius.circular(8),
-                      color: color,
-                    )
-                  ],
-                );
-              }).toList(),
-            )),
+              const SizedBox(height: 20),
+
+              // Summary Cards
+              _buildSummaryGrid(summary),
+              const SizedBox(height: 20),
+
+              // ── Charts stacked vertically ──
+              _buildAllPatientsStatusChart(summary),
+              const SizedBox(height: 14),
+              _buildAllPatientsMissedDosesChart(),
+              const SizedBox(height: 20),
+
+              // Filters + Search
+              _buildFiltersBar(),
+              const SizedBox(height: 12),
+
+              // Patients List
+              _buildPatientsHeader(),
+              const SizedBox(height: 10),
+              ..._buildFilteredList(),
+            ],
           ),
         ),
-        const SizedBox(height: 12),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          _legendDot(const Color(0xFF27AE60), 'Stable'),
-          const SizedBox(width: 16),
-          _legendDot(const Color(0xFFF39C12), 'Monitoring'),
-          const SizedBox(width: 16),
-          _legendDot(const Color(0xFFE74C3C), 'Critical'),
-        ]),
-      ]),
+      ),
+    );
+  }
+
+  // ── Summary Grid ─────────────────────────────────────────────────────────────
+  Widget _buildSummaryGrid(Map<String, dynamic> s) {
+    final items = [
+      {
+        'label': 'Total',
+        'value': '${s['totalPatients'] ?? 0}',
+        'icon': Icons.people_alt_rounded,
+        'color': AppColors.blueColor,
+      },
+      {
+        'label': 'Critical',
+        'value': '${s['criticalPatients'] ?? 0}',
+        'icon': Icons.emergency_rounded,
+        'color': const Color(0xFFE53935),
+      },
+      {
+        'label': 'Moderate',
+        'value': '${s['moderatePatients'] ?? 0}',
+        'icon': Icons.warning_amber_rounded,
+        'color': const Color(0xFFF57C00),
+      },
+      {
+        'label': 'Stable',
+        'value': '${s['stablePatients'] ?? 0}',
+        'icon': Icons.check_circle_outline_rounded,
+        'color': const Color(0xFF2E7D32),
+      },
+      {
+        'label': 'Active Meds',
+        'value': '${s['totalActiveMedications'] ?? 0}',
+        'icon': Icons.medication_rounded,
+        'color': const Color(0xFF7B1FA2),
+      },
+      {
+        'label': 'Warn Meds',
+        'value': '${s['patientsWithWarningMeds'] ?? 0}',
+        'icon': Icons.report_problem_rounded,
+        'color': const Color(0xFFFF8F00),
+      },
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 1.05,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: items.length,
+      itemBuilder: (_, i) {
+        final item = items[i];
+        final color = item['color'] as Color;
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                  color: color.withOpacity(.08),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4))
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(item['icon'] as IconData, color: color, size: 22),
+              ),
+              const SizedBox(height: 6),
+              Text(item['value'] as String,
+                  style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: color)),
+              const SizedBox(height: 2),
+              Text(item['label'] as String,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ── All Patients Status Donut Chart (full width) ──────────────────────────────
+  Widget _buildAllPatientsStatusChart(Map<String, dynamic> s) {
+    final critical = (s['criticalPatients'] ?? 0) as int;
+    final moderate = (s['moderatePatients'] ?? 0) as int;
+    final stable = (s['stablePatients'] ?? 0) as int;
+    final total = critical + moderate + stable;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.blueColor.withOpacity(.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child:
+                    Icon(Icons.pie_chart_rounded, color: AppColors.blueColor, size: 18),
+              ),
+              const SizedBox(width: 10),
+              const Text('Patient Status Overview',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: Colors.black87)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          total == 0
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('No data', style: TextStyle(color: Colors.grey)),
+                  ),
+                )
+              : Row(
+                  children: [
+                    // Donut chart
+                    SizedBox(
+                      height: 180,
+                      width: 180,
+                      child: PieChart(
+                        PieChartData(
+                          sectionsSpace: 3,
+                          centerSpaceRadius: 50,
+                          sections: [
+                            if (critical > 0)
+                              PieChartSectionData(
+                                value: critical.toDouble(),
+                                color: const Color(0xFFE53935),
+                                title: '${(critical / total * 100).round()}%',
+                                titleStyle: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold),
+                                radius: 52,
+                              ),
+                            if (moderate > 0)
+                              PieChartSectionData(
+                                value: moderate.toDouble(),
+                                color: const Color(0xFFF57C00),
+                                title: '${(moderate / total * 100).round()}%',
+                                titleStyle: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold),
+                                radius: 52,
+                              ),
+                            if (stable > 0)
+                              PieChartSectionData(
+                                value: stable.toDouble(),
+                                color: const Color(0xFF2E7D32),
+                                title: '${(stable / total * 100).round()}%',
+                                titleStyle: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold),
+                                radius: 52,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    // Legend
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _legendRow(
+                              const Color(0xFFE53935), 'Critical', critical, total),
+                          const SizedBox(height: 12),
+                          _legendRow(
+                              const Color(0xFFF57C00), 'Moderate', moderate, total),
+                          const SizedBox(height: 12),
+                          _legendRow(
+                              const Color(0xFF2E7D32), 'Stable', stable, total),
+                          const SizedBox(height: 12),
+                          Divider(color: Colors.grey.shade200),
+                          const SizedBox(height: 8),
+                          Text('Total: $total patients',
+                              style: TextStyle(
+                                  color: AppColors.blueColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+        ],
+      ),
+    );
+  }
+
+  Widget _legendRow(Color color, String label, int count, int total) {
+    final pct = total > 0 ? (count / total * 100).round() : 0;
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(label,
+              style:
+                  const TextStyle(fontSize: 13, color: Colors.black87)),
+        ),
+        Text('$count',
+            style: TextStyle(
+                fontWeight: FontWeight.bold, color: color, fontSize: 13)),
+        const SizedBox(width: 4),
+        Text('($pct%)',
+            style: const TextStyle(color: Colors.grey, fontSize: 11)),
+      ],
+    );
+  }
+
+  // ── All Patients Missed Doses Bar Chart (full width) ─────────────────────────
+  Widget _buildAllPatientsMissedDosesChart() {
+    final patients = _allPatients;
+    if (patients.isEmpty) return const SizedBox.shrink();
+
+    final missedData = patients.map((p) {
+      final stats = p['stats'] as Map<String, dynamic>? ?? {};
+      return (stats['missedDoses'] ?? 0) as int;
+    }).toList();
+
+    final patientNames = patients
+        .map((p) =>
+            (p['patientInfo'] as Map<String, dynamic>?)?['fullName']
+                ?.toString()
+                .split(' ')
+                .first ??
+            '?')
+        .toList();
+
+    final maxY = missedData.isEmpty
+        ? 5.0
+        : (missedData.reduce((a, b) => a > b ? a : b) + 1).toDouble();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE53935).withOpacity(.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.bar_chart_rounded,
+                    color: Color(0xFFE53935), size: 18),
+              ),
+              const SizedBox(width: 10),
+              const Text('Missed Doses — All Patients',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: Colors.black87)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 200,
+            child: missedData.isEmpty
+                ? const Center(child: Text('No data'))
+                : BarChart(
+                    BarChartData(
+                      maxY: maxY,
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        getDrawingHorizontalLine: (_) => FlLine(
+                          color: Colors.grey.shade100,
+                          strokeWidth: 1,
+                        ),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      titlesData: FlTitlesData(
+                        topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 24,
+                            getTitlesWidget: (v, _) => Text(
+                              '${v.toInt()}',
+                              style: const TextStyle(
+                                  fontSize: 10, color: Colors.grey),
+                            ),
+                          ),
+                        ),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 28,
+                            getTitlesWidget: (v, _) {
+                              final idx = v.toInt();
+                              if (idx < 0 || idx >= patientNames.length) {
+                                return const SizedBox.shrink();
+                              }
+                              final name = patientNames[idx];
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Text(
+                                  name.length > 5
+                                      ? name.substring(0, 5)
+                                      : name,
+                                  style: const TextStyle(
+                                      fontSize: 10, color: Colors.grey),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      barGroups: List.generate(missedData.length, (i) {
+                        final v = missedData[i];
+                        final color = v > 2
+                            ? const Color(0xFFE53935)
+                            : v > 0
+                                ? const Color(0xFFF57C00)
+                                : AppColors.blueColor.withOpacity(.5);
+                        return BarChartGroupData(x: i, barRods: [
+                          BarChartRodData(
+                            toY: v.toDouble(),
+                            color: color,
+                            width: 18,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ]);
+                      }),
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 8),
+          // Legend
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _legendDot(AppColors.blueColor.withOpacity(.5), 'No missed'),
+              const SizedBox(width: 16),
+              _legendDot(const Color(0xFFF57C00), '1–2 missed'),
+              const SizedBox(width: 16),
+              _legendDot(const Color(0xFFE53935), '3+ missed'),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
   Widget _legendDot(Color color, String label) {
-    return Row(children: [
-      Container(
-          width: 10,
-          height: 10,
-          decoration:
-              BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
-      const SizedBox(width: 5),
-      Text(label,
-          style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
-    ]);
+    return Row(
+      children: [
+        Container(
+            width: 10,
+            height: 10,
+            decoration:
+                BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 5),
+        Text(label,
+            style: const TextStyle(fontSize: 10, color: Colors.grey)),
+      ],
+    );
   }
 
-  // ── medication status pie ───────────────────────────────────
-  Widget _buildPieChart() {
-    final takenCount = events.where((e) => e.event == 'Taken on Time').length;
-    final missedCount = events.where((e) => e.event == 'Missed Dose').length;
-    final total = takenCount + missedCount;
+  // ── Filters Bar ──────────────────────────────────────────────────────────────
+  Widget _buildFiltersBar() {
+    final filters = [
+      {'key': 'all', 'label': 'All'},
+      {'key': 'critical', 'label': 'Critical'},
+      {'key': 'moderate', 'label': 'Moderate'},
+      {'key': 'stable', 'label': 'Stable'},
+    ];
 
-    return _softCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _sectionTitle('Medication Status', Icons.pie_chart_outline_rounded),
-        const SizedBox(height: 4),
-        Text('Taken vs Missed across all patients',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-        const SizedBox(height: 18),
-        if (total == 0)
-          const SizedBox(
-              height: 160,
-              child: Center(child: Text('No medication data yet')))
-        else
-          RepaintBoundary(
-            key: _pieKey,
-            child: SizedBox(
-              height: 200,
-              child: Column(children: [
-                Expanded(
-                  child: PieChart(PieChartData(
-                    centerSpaceRadius: 36,
-                    sectionsSpace: 4,
-                    sections: [
-                      PieChartSectionData(
-                        value: takenCount.toDouble(),
-                        color: const Color(0xFF27AE60),
-                        title: total > 0
-                            ? '${((takenCount / total) * 100).round()}%'
-                            : '',
-                        radius: 55,
-                        titleStyle: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13),
-                      ),
-                      PieChartSectionData(
-                        value: missedCount.toDouble(),
-                        color: const Color(0xFFE74C3C),
-                        title: total > 0
-                            ? '${((missedCount / total) * 100).round()}%'
-                            : '',
-                        radius: 55,
-                        titleStyle: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13),
-                      ),
-                    ],
-                  )),
-                ),
-                const SizedBox(height: 14),
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  _legendDot(const Color(0xFF27AE60), 'Taken ($takenCount)'),
-                  const SizedBox(width: 20),
-                  _legendDot(const Color(0xFFE74C3C), 'Missed ($missedCount)'),
-                ]),
-              ]),
+    return Column(
+      children: [
+        TextField(
+          controller: _searchController,
+          onChanged: (v) => setState(() => _searchQuery = v),
+          decoration: InputDecoration(
+            hintText: 'Search patient…',
+            hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+            prefixIcon:
+                const Icon(Icons.search_rounded, color: Colors.grey, size: 20),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear_rounded,
+                        color: Colors.grey, size: 18),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _searchQuery = '');
+                    },
+                  )
+                : null,
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
             ),
           ),
-      ]),
+        ),
+        const SizedBox(height: 10),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: filters.map((f) {
+              final key = f['key']!;
+              final isActive = _statusFilter == key;
+              final color = key == 'critical'
+                  ? const Color(0xFFE53935)
+                  : key == 'moderate'
+                      ? const Color(0xFFF57C00)
+                      : key == 'stable'
+                          ? const Color(0xFF2E7D32)
+                          : AppColors.blueColor;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => setState(() => _statusFilter = key),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isActive ? color : Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isActive ? color : Colors.grey.shade300,
+                      ),
+                      boxShadow: isActive
+                          ? [
+                              BoxShadow(
+                                  color: color.withOpacity(.25),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3))
+                            ]
+                          : [],
+                    ),
+                    child: Text(
+                      f['label']!,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight:
+                            isActive ? FontWeight.bold : FontWeight.normal,
+                        color: isActive
+                            ? Colors.white
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 
-  // ── event log ──────────────────────────────────────────────
-  Widget _buildEventCard(_MedEvent event) {
-    final color = _severityColor(event.severity);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFF0F2F5)),
-      ),
-      child: Row(children: [
-        CircleAvatar(
-          radius: 20,
-          backgroundColor: color.withOpacity(0.12),
-          child: Icon(Icons.medication_outlined, color: color, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(event.patientName,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-            const SizedBox(height: 3),
-            Text('${event.medicationName} — ${event.dosage}',
-                style:
-                    TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-            const SizedBox(height: 3),
-            Text(event.event,
-                style: TextStyle(
-                    color: event.event == 'Taken on Time'
-                        ? const Color(0xFF27AE60)
-                        : const Color(0xFFE74C3C),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
-          ]),
-        ),
+  // ── Patients Header ──────────────────────────────────────────────────────────
+  Widget _buildPatientsHeader() {
+    final count = _filteredPatients.length;
+    return Row(
+      children: [
+        const Text('Patients',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+        const Spacer(),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-              color: _severityBg(event.severity),
-              borderRadius: BorderRadius.circular(20)),
-          child: Text(event.severity.toUpperCase(),
-              style: TextStyle(
-                  color: color, fontWeight: FontWeight.w700, fontSize: 11)),
+            color: AppColors.blueColor.withOpacity(.1),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            '$count result${count != 1 ? 's' : ''}',
+            style: TextStyle(
+                color: AppColors.blueColor,
+                fontWeight: FontWeight.w600,
+                fontSize: 12),
+          ),
         ),
-      ]),
+      ],
     );
   }
 
-  // ── filters ────────────────────────────────────────────────
-  Widget _buildFilters() {
-    final patientNames =
-        patients.map((p) => p.name).toSet().toList()..sort();
-
-    return _softCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _sectionTitle('Filters', Icons.tune_rounded),
-        const SizedBox(height: 14),
-        _filterDropdown<String>(
-          label: 'Patient',
-          value: selectedPatient,
-          items: [
-            const DropdownMenuItem(value: 'all', child: Text('All Patients')),
-            ...patientNames.map((n) =>
-                DropdownMenuItem(value: n, child: Text(n, overflow: TextOverflow.ellipsis))),
-          ],
-          onChanged: (v) => setState(() => selectedPatient = v!),
-        ),
-        const SizedBox(height: 12),
-        _filterDropdown<String>(
-          label: 'Risk Level',
-          value: selectedLevel,
-          items: const [
-            DropdownMenuItem(value: 'all', child: Text('All Levels')),
-            DropdownMenuItem(value: 'high', child: Text('High Risk')),
-            DropdownMenuItem(value: 'medium', child: Text('Medium Risk')),
-            DropdownMenuItem(value: 'low', child: Text('Low Risk')),
-          ],
-          onChanged: (v) => setState(() => selectedLevel = v!),
-        ),
-      ]),
-    );
-  }
-
-  Widget _filterDropdown<T>({
-    required String label,
-    required T value,
-    required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: DropdownButtonFormField<T>(
-        initialValue: value,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(color: Color(0xFF6B7280)),
-          border: InputBorder.none,
-        ),
-        icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.blueColor),
-        items: items,
-        onChanged: onChanged,
-      ),
-    );
-  }
-
-  // ── build ──────────────────────────────────────────────────
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    if (errorMessage.isNotEmpty) {
-      return Scaffold(
-        body: Center(
+  List<Widget> _buildFilteredList() {
+    final list = _filteredPatients;
+    if (list.isEmpty) {
+      return [
+        const SizedBox(height: 40),
+        Center(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              Icon(Icons.search_off_rounded,
+                  size: 52, color: Colors.grey.shade300),
               const SizedBox(height: 12),
-              Text(errorMessage,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey.shade600)),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                  onPressed: _loadData,
-                  child: const Text('Retry')),
+              Text('No patients found',
+                  style: TextStyle(
+                      color: Colors.grey.shade500, fontSize: 15)),
             ],
           ),
         ),
-      );
+      ];
     }
+    return list.map((p) => _buildPatientCard(p)).toList();
+  }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7FAFC),
-      body: SafeArea(
-        child: Column(children: [
-          // ── fixed header ───────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 40, 16, 0),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: AppColors.blueColor,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                      color: AppColors.blueColor.withOpacity(0.18),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8))
-                ],
-              ),
-              child: Row(children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(18),
+  // ── Patient Card ─────────────────────────────────────────────────────────────
+  Widget _buildPatientCard(Map<String, dynamic> patient) {
+    final info = patient['patientInfo'] as Map<String, dynamic>;
+    final stats = patient['stats'] as Map<String, dynamic>? ?? {};
+    final status = stats['healthStatus']?.toString() ?? 'unknown';
+    final imageUrl = info['image']?['secure_url'] as String?;
+    final name = info['fullName']?.toString() ?? 'Unknown';
+    final dob = info['DOB']?.toString();
+    final gender = info['gender']?.toString() ?? '';
+    final totalMeds = stats['totalMedications'] ?? 0;
+    final missedDoses = stats['missedDoses'] ?? 0;
+    final warningMeds = stats['warningMedications'] ?? 0;
+    final chronicDiseases = stats['chronicDiseases'] ?? 0;
+    final statusColor = _statusColor(status);
+
+    return GestureDetector(
+      onTap: () => setState(() => _selectedPatient = patient),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+                color: statusColor.withOpacity(.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4))
+          ],
+          border: Border(
+            left: BorderSide(color: statusColor, width: 4),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 26,
+                    backgroundColor: statusColor.withOpacity(.12),
+                    backgroundImage:
+                        imageUrl != null ? NetworkImage(imageUrl) : null,
+                    child: imageUrl == null
+                        ? Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : '?',
+                            style: TextStyle(
+                                color: statusColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20),
+                          )
+                        : null,
                   ),
-                  child: const Icon(Icons.description_outlined,
-                      color: Colors.white, size: 28),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Medication Reports',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 20)),
-                        const SizedBox(height: 4),
-                        Text(
-                            '${patients.length} patients · ${events.length} medication records',
+                        Text(name,
                             style: const TextStyle(
-                                color: Colors.white70, fontSize: 13)),
-                      ]),
-                ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: AppColors.blueColor,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                                fontWeight: FontWeight.bold, fontSize: 15)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${_calcAge(dob)} · ${gender.isNotEmpty ? gender[0].toUpperCase() + gender.substring(1) : '—'} · ${patient['bloodType'] ?? '—'}',
+                          style:
+                              const TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
+                      ],
+                    ),
                   ),
-                  onPressed: isGenerating ? null : _generatePdf,
-                  icon: isGenerating
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.blue))
-                      : const Icon(Icons.download_rounded, size: 18),
-                  label: Text(isGenerating ? '...' : 'Export'),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border:
+                          Border.all(color: statusColor.withOpacity(.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(_statusIcon(status),
+                            color: statusColor, size: 12),
+                        const SizedBox(width: 4),
+                        Text(
+                          status[0].toUpperCase() + status.substring(1),
+                          style: TextStyle(
+                              color: statusColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8F9FD),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-              ]),
+                child: Row(
+                  children: [
+                    _miniStat(Icons.medication_rounded,
+                        '$totalMeds meds', AppColors.blueColor),
+                    _miniStat(Icons.warning_amber_rounded,
+                        '$warningMeds warn', const Color(0xFFF57C00)),
+                    _miniStat(Icons.local_hospital_rounded,
+                        '$chronicDiseases chr', const Color(0xFF7B1FA2)),
+                    _miniStat(
+                        Icons.cancel_outlined,
+                        '$missedDoses miss',
+                        missedDoses > 0 ? Colors.red : Colors.green),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _miniStat(IconData icon, String label, Color color) {
+    return Expanded(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 13),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 11,
+                    color: color,
+                    fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Patient Detail ───────────────────────────────────────────────────────────
+  Widget _buildPatientDetail(Map<String, dynamic> patient) {
+    final info = patient['patientInfo'] as Map<String, dynamic>;
+    final stats = patient['stats'] as Map<String, dynamic>? ?? {};
+    final activeMeds = (patient['activeMedications'] as List?) ?? [];
+    final chronicDiseases = (patient['chronicDiseases'] as List?) ?? [];
+    final medStats = (patient['medicationStats'] as List?) ?? [];
+    final imageUrl = info['image']?['secure_url'] as String?;
+    final name = info['fullName']?.toString() ?? 'Unknown';
+    final status = stats['healthStatus']?.toString() ?? 'unknown';
+    final statusColor = _statusColor(status);
+
+    final missedMap = <String, int>{};
+    for (final ms in medStats) {
+      final id = ms['medicineId']?.toString() ?? '';
+      missedMap[id] = (ms['missedDoses'] as num?)?.toInt() ?? 0;
+    }
+
+    final warnCounts = <String, int>{
+      'safe': 0,
+      'mild': 0,
+      'moderate': 0,
+      'caution': 0,
+      'severe': 0,
+    };
+    for (final m in activeMeds) {
+      final lvl =
+          (m as Map<String, dynamic>)['warningLevel']?.toString() ?? 'safe';
+      warnCounts[lvl] = (warnCounts[lvl] ?? 0) + 1;
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Back button header
+          Padding(
+            padding: const EdgeInsets.only(top: 40, bottom: 10),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => setState(() => _selectedPatient = null),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.black.withOpacity(.06),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3))
+                      ],
+                    ),
+                    child: const Icon(Icons.arrow_back_ios_new_rounded,
+                        size: 18, color: Colors.black87),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 18),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ),
 
-          // ── scrollable body ────────────────────────────────
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _loadData,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                child: Column(children: [
-                  // stats row
-                  Row(children: [
-                    _statsCard(
-                      title: 'Total Patients',
-                      value: '${patients.length}',
-                      color: AppColors.blueColor,
-                      icon: Icons.people_outline,
-                    ),
-                    const SizedBox(width: 10),
-                    _statsCard(
-                      title: 'High Risk',
-                      value: '$highCount',
-                      color: const Color(0xFFE74C3C),
-                      icon: Icons.priority_high_rounded,
-                    ),
-                    const SizedBox(width: 10),
-                    _statsCard(
-                      title: 'Medium Risk',
-                      value: '$mediumCount',
-                      color: const Color(0xFFF39C12),
-                      icon: Icons.warning_amber_rounded,
-                    ),
-                  ]),
-                  const SizedBox(height: 16),
+          // Profile header
+          _buildDetailHeader(
+              info, name, imageUrl, status, statusColor, patient),
+          const SizedBox(height: 14),
 
-                  _buildFilters(),
-                  const SizedBox(height: 16),
+          // ── Patient-specific charts stacked vertically ──
+          _buildPatientStatusChart(stats),
+          const SizedBox(height: 14),
+          _buildDetailWarningLevelsChart(warnCounts),
+          const SizedBox(height: 14),
+          _buildDetailMissedDosesChart(activeMeds, missedMap),
+          const SizedBox(height: 14),
 
-                  _buildAdherenceChart(),
-                  const SizedBox(height: 16),
+          // Medical info
+          _buildMedicalInfo(patient),
+          const SizedBox(height: 14),
 
-                  _buildPieChart(),
-                  const SizedBox(height: 16),
+          // Chronic diseases
+          if (chronicDiseases.isNotEmpty) ...[
+            _sectionTitle('Chronic Diseases'),
+            const SizedBox(height: 8),
+            ...chronicDiseases
+                .map((d) => _buildDiseaseCard(d as Map<String, dynamic>)),
+            const SizedBox(height: 14),
+          ],
 
-                  // event log
-                  _softCard(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _sectionTitle(
-                              'Medication Event Log', Icons.list_alt_rounded),
-                          const SizedBox(height: 14),
-                          if (filteredEvents.isEmpty)
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 20),
-                              child: Center(
-                                child: Text('No matching events',
-                                    style: TextStyle(
-                                        color: Colors.grey.shade500)),
-                              ),
-                            )
-                          else
-                            ...filteredEvents.map(_buildEventCard),
-                        ]),
+          // Active medications
+          Row(
+            children: [
+              _sectionTitle('Active Medications'),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.blueColor.withOpacity(.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text('${activeMeds.length}',
+                    style: TextStyle(
+                        color: AppColors.blueColor,
+                        fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (activeMeds.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    Icon(Icons.medication_outlined,
+                        size: 40, color: Colors.grey.shade300),
+                    const SizedBox(height: 8),
+                    Text('No active medications',
+                        style: TextStyle(color: Colors.grey.shade500)),
+                  ],
+                ),
+              ),
+            )
+          else
+            ...activeMeds.map((med) {
+              final m = med as Map<String, dynamic>;
+              final medId = m['_id']?.toString() ??
+                  m['medicineId']?.toString() ??
+                  '';
+              final missed = missedMap[medId] ?? 0;
+              return _buildMedCard(m, missed);
+            }),
+        ],
+      ),
+    );
+  }
+
+  // ── Patient Status Summary Chart (detail page) ────────────────────────────────
+  Widget _buildPatientStatusChart(Map<String, dynamic> stats) {
+    final status = stats['healthStatus']?.toString() ?? 'unknown';
+    final statusColor = _statusColor(status);
+    final totalMeds = (stats['totalMedications'] ?? 0) as int;
+    final missedDoses = (stats['missedDoses'] ?? 0) as int;
+    final warningMeds = (stats['warningMedications'] ?? 0) as int;
+    final chronicDiseases = (stats['chronicDiseases'] ?? 0) as int;
+
+    final statItems = [
+      {
+        'label': 'Total Meds',
+        'value': totalMeds,
+        'icon': Icons.medication_rounded,
+        'color': AppColors.blueColor,
+      },
+      {
+        'label': 'Warning Meds',
+        'value': warningMeds,
+        'icon': Icons.report_problem_rounded,
+        'color': const Color(0xFFFF8F00),
+      },
+      {
+        'label': 'Chronic',
+        'value': chronicDiseases,
+        'icon': Icons.local_hospital_rounded,
+        'color': const Color(0xFF7B1FA2),
+      },
+      {
+        'label': 'Missed',
+        'value': missedDoses,
+        'icon': Icons.cancel_outlined,
+        'color': missedDoses > 0
+            ? const Color(0xFFE53935)
+            : const Color(0xFF2E7D32),
+      },
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: statusColor.withOpacity(.07),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child:
+                    Icon(_statusIcon(status), color: statusColor, size: 18),
+              ),
+              const SizedBox(width: 10),
+              const Text('Patient Overview',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: Colors.black87)),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: statusColor.withOpacity(.3)),
+                ),
+                child: Text(
+                  status[0].toUpperCase() + status.substring(1),
+                  style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: statItems.map((item) {
+              final color = item['color'] as Color;
+              return Expanded(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(.06),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: color.withOpacity(.15)),
                   ),
-                ]),
+                  child: Column(
+                    children: [
+                      Icon(item['icon'] as IconData,
+                          color: color, size: 20),
+                      const SizedBox(height: 6),
+                      Text('${item['value']}',
+                          style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: color)),
+                      const SizedBox(height: 3),
+                      Text(item['label'] as String,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontSize: 10, color: Colors.grey)),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Patient Warning Levels Chart (detail page) ────────────────────────────────
+  Widget _buildDetailWarningLevelsChart(Map<String, int> warnCounts) {
+    final warnLabels = ['Safe', 'Mild', 'Moderate', 'Caution', 'Severe'];
+    final warnColors = [
+      const Color(0xFF43A047),
+      const Color(0xFFF9A825),
+      const Color(0xFFF57C00),
+      const Color(0xFFFF8F00),
+      const Color(0xFFE53935),
+    ];
+    final warnKeys = ['safe', 'mild', 'moderate', 'caution', 'severe'];
+    final warnValues =
+        warnKeys.map((k) => warnCounts[k] ?? 0).toList();
+    final maxWarn =
+        warnValues.isEmpty ? 1 : warnValues.reduce((a, b) => a > b ? a : b);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF57C00).withOpacity(.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.warning_amber_rounded,
+                    color: Color(0xFFF57C00), size: 18),
+              ),
+              const SizedBox(width: 10),
+              const Text('Medication Warning Levels',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: Colors.black87)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 180,
+            child: BarChart(
+              BarChartData(
+                maxY: (maxWarn + 1).toDouble(),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  getDrawingHorizontalLine: (_) => FlLine(
+                    color: Colors.grey.shade100,
+                    strokeWidth: 1,
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 24,
+                      getTitlesWidget: (v, _) => Text(
+                        '${v.toInt()}',
+                        style: const TextStyle(
+                            fontSize: 10, color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 28,
+                      getTitlesWidget: (v, _) {
+                        final idx = v.toInt();
+                        if (idx < 0 || idx >= warnLabels.length) {
+                          return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            warnLabels[idx].length > 4
+                                ? warnLabels[idx].substring(0, 4)
+                                : warnLabels[idx],
+                            style: const TextStyle(
+                                fontSize: 10, color: Colors.grey),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                barGroups: List.generate(warnValues.length, (i) {
+                  return BarChartGroupData(x: i, barRods: [
+                    BarChartRodData(
+                      toY: warnValues[i].toDouble(),
+                      color: warnColors[i],
+                      width: 28,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ]);
+                }),
               ),
             ),
           ),
-        ]),
+        ],
+      ),
+    );
+  }
+
+  // ── Patient Missed Doses per Medication Chart (detail page) ───────────────────
+  Widget _buildDetailMissedDosesChart(
+      List activeMeds, Map<String, int> missedMap) {
+    if (activeMeds.isEmpty) return const SizedBox.shrink();
+
+    final missedValues = activeMeds.map((m) {
+      final med = m as Map<String, dynamic>;
+      final id =
+          med['_id']?.toString() ?? med['medicineId']?.toString() ?? '';
+      return missedMap[id] ?? 0;
+    }).toList();
+
+    final medNames = activeMeds.map((m) {
+      final name =
+          (m as Map<String, dynamic>)['medicationName']?.toString() ?? '?';
+      return name.length > 7 ? name.substring(0, 7) : name;
+    }).toList();
+
+    final maxMissed = missedValues.isEmpty
+        ? 1
+        : missedValues.reduce((a, b) => a > b ? a : b);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE53935).withOpacity(.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.cancel_outlined,
+                    color: Color(0xFFE53935), size: 18),
+              ),
+              const SizedBox(width: 10),
+              const Text('Missed Doses per Medication',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: Colors.black87)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 180,
+            child: BarChart(
+              BarChartData(
+                maxY: (maxMissed + 1).toDouble(),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  getDrawingHorizontalLine: (_) => FlLine(
+                    color: Colors.grey.shade100,
+                    strokeWidth: 1,
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 24,
+                      getTitlesWidget: (v, _) => Text(
+                        '${v.toInt()}',
+                        style: const TextStyle(
+                            fontSize: 10, color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 28,
+                      getTitlesWidget: (v, _) {
+                        final idx = v.toInt();
+                        if (idx < 0 || idx >= medNames.length) {
+                          return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(medNames[idx],
+                              style: const TextStyle(
+                                  fontSize: 9, color: Colors.grey)),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                barGroups: List.generate(missedValues.length, (i) {
+                  final v = missedValues[i];
+                  return BarChartGroupData(x: i, barRods: [
+                    BarChartRodData(
+                      toY: v.toDouble(),
+                      color: v > 0
+                          ? const Color(0xFFE53935)
+                          : AppColors.blueColor.withOpacity(.5),
+                      width: 22,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ]);
+                }),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailHeader(
+    Map<String, dynamic> info,
+    String name,
+    String? imageUrl,
+    String status,
+    Color statusColor,
+    Map<String, dynamic> patient,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: statusColor.withOpacity(.1),
+              blurRadius: 12,
+              offset: const Offset(0, 4))
+        ],
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 36,
+            backgroundColor: statusColor.withOpacity(.12),
+            backgroundImage:
+                imageUrl != null ? NetworkImage(imageUrl) : null,
+            child: imageUrl == null
+                ? Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : '?',
+                    style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 26),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 3),
+                Text(info['email']?.toString() ?? '',
+                    style:
+                        const TextStyle(color: Colors.grey, fontSize: 12)),
+                const SizedBox(height: 3),
+                Text(
+                  '${info['phone'] ?? ''} · ${info['gender'] ?? ''}',
+                  style:
+                      const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: statusColor.withOpacity(.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(_statusIcon(status), color: statusColor, size: 14),
+                const SizedBox(width: 4),
+                Text(
+                  status[0].toUpperCase() + status.substring(1),
+                  style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Medical Info ─────────────────────────────────────────────────────────────
+  Widget _buildMedicalInfo(Map<String, dynamic> patient) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(.04),
+              blurRadius: 8,
+              offset: const Offset(0, 3))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle('Medical Info'),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _infoChip('🩸 ${patient['bloodType'] ?? '—'}',
+                  Colors.red.shade50, Colors.red),
+              const SizedBox(width: 8),
+              _infoChip('📏 ${patient['height'] ?? '—'} cm',
+                  Colors.blue.shade50, Colors.blue),
+              const SizedBox(width: 8),
+              _infoChip('⚖️ ${patient['weight'] ?? '—'} kg',
+                  Colors.green.shade50, Colors.green),
+            ],
+          ),
+          if (patient['allergies'] != null &&
+              patient['allergies'].toString().toLowerCase() != 'no' &&
+              patient['allergies'].toString().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      color: Colors.orange, size: 16),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Allergies: ${patient['allergies']}',
+                      style: const TextStyle(
+                          fontSize: 13, color: Colors.orange),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _infoChip(String label, Color bg, Color fg) {
+    return Expanded(
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: fg, fontWeight: FontWeight.w600, fontSize: 12)),
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String title) {
+    return Text(title,
+        style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            color: Colors.black87));
+  }
+
+  // ── Disease Card ─────────────────────────────────────────────────────────────
+  Widget _buildDiseaseCard(Map<String, dynamic> disease) {
+    final statusD = disease['status']?.toString() ?? 'unknown';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(.03), blurRadius: 6)
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF7B1FA2).withOpacity(.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.local_hospital_rounded,
+                color: Color(0xFF7B1FA2), size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(disease['name']?.toString() ?? '—',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: _statusColor(statusD).withOpacity(.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    statusD[0].toUpperCase() + statusD.substring(1),
+                    style: TextStyle(
+                        color: _statusColor(statusD),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (disease['notes'] != null &&
+                    disease['notes'].toString().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(disease['notes'].toString(),
+                      style: const TextStyle(
+                          color: Colors.grey, fontSize: 12)),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Medication Card ──────────────────────────────────────────────────────────
+  Widget _buildMedCard(Map<String, dynamic> med, int missed) {
+    final warnLevel = med['warningLevel']?.toString() ?? 'safe';
+    final warnColor = _warningColor(warnLevel);
+    final sideEffects = (med['sideEffects'] as List?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        [];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: warnColor.withOpacity(.2), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+              color: warnColor.withOpacity(.06),
+              blurRadius: 8,
+              offset: const Offset(0, 3))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: warnColor.withOpacity(.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.medication_rounded,
+                    color: warnColor, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(med['medicationName']?.toString() ?? '—',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text(
+                      '${med['dosage']} · ${med['repeat']} · ⏰ ${med['reminderTime']}',
+                      style: const TextStyle(
+                          color: Colors.grey, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: warnColor.withOpacity(.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: warnColor.withOpacity(.4)),
+                ),
+                child: Text(
+                  warnLevel[0].toUpperCase() + warnLevel.substring(1),
+                  style: TextStyle(
+                      color: warnColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          if (missed > 0) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cancel_outlined,
+                      color: Colors.red, size: 14),
+                  const SizedBox(width: 4),
+                  Text(
+                    '$missed missed dose${missed > 1 ? 's' : ''}',
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (sideEffects.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            const Text('Side Effects:',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black54)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: sideEffects
+                  .map((e) => Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Text(e,
+                            style: const TextStyle(
+                                fontSize: 11, color: Colors.black87)),
+                      ))
+                  .toList(),
+            ),
+          ],
+        ],
       ),
     );
   }

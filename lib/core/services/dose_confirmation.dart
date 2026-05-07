@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
 import 'package:flutter_application_2/core/services/dose_log_services.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 class DoseConfirmationScreen extends StatefulWidget {
   final String medicationId;
@@ -46,10 +47,23 @@ class _DoseConfirmationScreenState extends State<DoseConfirmationScreen> {
 Future<void> _saveStatus(String status) async {
   setState(() => isSaving = true);
 
-  // ✅ لو اتاخد → ابعت للـ API
   if (status == "taken") {
     try {
-      await ApiService.takeMedication(widget.medicationId);
+      // ✅ جيب الـ pending logs وابحث عن اللي بيطابق الـ medicineId
+      final pending = await ApiService.getPendingMedications();
+
+      final log = pending.firstWhere(
+        (p) => p["medicineId"].toString() == widget.medicationId,
+        orElse: () => null,
+      );
+
+      if (log != null) {
+        final logId = log["_id"].toString();
+        await ApiService.takeMedication(logId);
+        print("✅ Taken with logId: $logId");
+      } else {
+        print("⚠️ No pending log found for medicineId: ${widget.medicationId}");
+      }
     } catch (e) {
       print("Take medication API error: $e");
     }
@@ -64,7 +78,6 @@ Future<void> _saveStatus(String status) async {
   );
 
   if (!mounted) return;
-
   setState(() {
     currentStatus = status;
     isSaving = false;
@@ -170,26 +183,7 @@ Future<void> _saveStatus(String status) async {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          onPressed: () { _saveStatus("not_yet");
-                                              Navigator.pop(context);}
-,
-                          child: const Text(
-                            "Not yet",
-                            style: TextStyle(color: Colors.white),
-                          ),
-                        ),
-                      ),
+                      
                       const SizedBox(height: 10),
                       SizedBox(
                         width: double.infinity,
@@ -201,7 +195,7 @@ Future<void> _saveStatus(String status) async {
                               borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                          onPressed: () => _saveStatus("skipped"),
+                          onPressed: ()  { Navigator.pop(context);},
                           child: const Text(
                             "Skip dose",
                             style: TextStyle(color: Colors.white),

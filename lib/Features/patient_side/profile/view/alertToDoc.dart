@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
 
+// ── Models ──────────────────────────────────────────────────
+
 class DoctorContact {
   final String id;
   final String name;
@@ -14,25 +16,43 @@ class DoctorContact {
   });
 }
 
-class PatientAlertItem {
-  final int id;
+class SentSosItem {
+  final String id;
   final String doctorName;
-  final String type;
+  final String doctorEmail;
+  final String updateType;
   final String severity;
   final String details;
-  final String time;
-  final String status;
+  final bool isResolved;
+  final DateTime createdAt;
 
-  PatientAlertItem({
+  SentSosItem({
     required this.id,
     required this.doctorName,
-    required this.type,
+    required this.doctorEmail,
+    required this.updateType,
     required this.severity,
     required this.details,
-    required this.time,
-    required this.status,
+    required this.isResolved,
+    required this.createdAt,
   });
+
+  factory SentSosItem.fromJson(Map<String, dynamic> json) {
+    final doctor = json['doctorId'] as Map<String, dynamic>? ?? {};
+    return SentSosItem(
+      id: json['_id'] ?? '',
+      doctorName: doctor['fullName'] ?? 'Unknown Doctor',
+      doctorEmail: doctor['email'] ?? '',
+      updateType: json['updateType'] ?? 'other',
+      severity: json['severity'] ?? 'medium',
+      details: json['details'] ?? '',
+      isResolved: json['isResolved'] ?? false,
+      createdAt: DateTime.parse(json['createdAt']),
+    );
+  }
 }
+
+// ── Page ─────────────────────────────────────────────────────
 
 class PatientAlertsPage extends StatefulWidget {
   const PatientAlertsPage({super.key});
@@ -44,90 +64,58 @@ class PatientAlertsPage extends StatefulWidget {
 class _PatientAlertsPageState extends State<PatientAlertsPage> {
   final TextEditingController detailsController = TextEditingController();
 
-   List<DoctorContact> doctors = [
-  ];
+  List<DoctorContact> doctors = [];
   DoctorContact? selectedDoctor;
 
-String selectedType = "Emergency Alert";
-String selectedSeverity = "medium";
+  // ✅ القيم دي هي اللي بتتبعت للـ API بالظبط
+  String selectedType = "chest_pain";
+  String selectedSeverity = "medium";
 
-final List<String> alertTypes = [
-  "Emergency Alert",
-  "Missed Medication",
-  "Side Effect",
-  "New Symptom",
-  "Medication Question",
-  "Follow-up Update",
-];
+  final List<String> alertTypes = [
+    "chest_pain",
+    "breathing",
+    "unconscious",
+    "fall",
+    "other",
+  ];
 
-List<PatientAlertItem> sentAlerts = [];
+  // ✅ Real SOS history from API
+  List<SentSosItem> sentSosHistory = [];
+  bool isLoadingHistory = false;
+  bool isSending = false;
 
-Future<void> loadDoctors() async {
-  try {
-    final List data = await ApiService.getmydoctors();
+  // ── Helpers ─────────────────────────────────────────────
 
-    setState(() {
-      doctors = data.map<DoctorContact>((doc) {
-        return DoctorContact(
-id: doc['userId']?['_id'] ?? '',          name: doc['userId']?['fullName'] ?? 'Unknown Doctor',
-          specialty: doc['specialization'] ?? 'Doctor',
-        );
-      }).toList();
-
-      if (doctors.isNotEmpty) {
-        selectedDoctor = doctors.first;
-      }
-    });
-
-  } catch (e) {
-    debugPrint("Doctors error: $e");
-  }
-}
-
-@override
-void initState() {
-  super.initState();
-  loadDoctors(); // 🔥 أهم سطر
-}
-  // @override
-  // void initState() {
-  //   super.initState();
-  //   selectedDoctor = doctors.first;
-  // }
-
-  @override
-  void dispose() {
-    detailsController.dispose();
-    super.dispose();
-  }
-
-String mapUpdateType(String type) {
-  switch (type) {
-    case "Emergency Alert":
-    case "Chest Pain":
-      return "chest_pain";
-    case "Breathing Issue":
-      return "breathing";
-    case "Unconscious":
-      return "unconscious";
-    case "Fall":
-      return "fall";
-    default:
-      return "other";
-  }
-}
-  Color severityColor(String severity) {
-    switch (severity) {
-      case "high":
-        return Colors.redAccent;
-      case "medium":
-        return Colors.orangeAccent;
-      case "low":
-        return Colors.green;
+  String displayAlertType(String type) {
+    switch (type) {
+      case "chest_pain":
+        return "Chest Pain";
+      case "breathing":
+        return "Breathing Issue";
+      case "unconscious":
+        return "Unconscious";
+      case "fall":
+        return "Fall";
       default:
-        return Colors.grey;
+        return "Other";
     }
   }
+
+  Color _severityColorFor(String severity) {
+    switch (severity) {
+      case 'high':
+      case 'critical':
+        return Colors.redAccent;
+      case 'medium':
+        return Colors.orangeAccent;
+      case 'low':
+        return Colors.green;
+      default:
+        return Colors.orangeAccent;
+    }
+  }
+
+  Color severityColor(String severity) => _severityColorFor(severity);
 
   Color statusColor(String status) {
     switch (status) {
@@ -141,52 +129,113 @@ String mapUpdateType(String type) {
         return Colors.grey;
     }
   }
-Future<void> sendAlert() async {
-  if (selectedDoctor == null || detailsController.text.trim().isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text("Please complete all required fields"),
-        backgroundColor: AppColors.blueColor,
-      ),
-    );
-    return;
+
+  String _formatTimeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'Just now';
   }
 
-  try {
-  await ApiService.createSos(
-  doctorId: selectedDoctor!.id,
-  updateType: mapUpdateType(selectedType),
-  severity: selectedSeverity,
-  details: detailsController.text.trim(),
-);
+  // ── Data loading ─────────────────────────────────────────
 
-    final newAlert = PatientAlertItem(
-      id: DateTime.now().millisecondsSinceEpoch,
-      doctorName: selectedDoctor!.name,
-      type: selectedType,
-      severity: selectedSeverity,
-      details: detailsController.text.trim(),
-      time: "Just now",
-      status: "sent",
-    );
-
-    setState(() {
-      sentAlerts.insert(0, newAlert);
-      detailsController.clear();
-      selectedSeverity = "medium";
-      selectedType = "Emergency Alert";
-    });
-
-    showSuccessDialog();
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Failed to send SOS: $e"),
-        backgroundColor: Colors.red,
-      ),
-    );
+  Future<void> loadDoctors() async {
+    try {
+      final List data = await ApiService.getmydoctors();
+      setState(() {
+        doctors = data.map<DoctorContact>((doc) {
+          return DoctorContact(
+            id: doc['userId']?['_id'] ?? '',
+            name: doc['userId']?['fullName'] ?? 'Unknown Doctor',
+            specialty: doc['specialization'] ?? 'Doctor',
+          );
+        }).toList();
+        if (doctors.isNotEmpty) {
+          selectedDoctor = doctors.first;
+        }
+      });
+    } catch (e) {
+      debugPrint("Doctors error: $e");
+    }
   }
-} void showSuccessDialog() {
+
+  Future<void> _loadMySos() async {
+    setState(() => isLoadingHistory = true);
+    try {
+      final data = await ApiService.getMySos();
+      final items = data.map((e) => SentSosItem.fromJson(e)).toList();
+      items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      setState(() {
+        sentSosHistory = items;
+        isLoadingHistory = false;
+      });
+    } catch (e) {
+      setState(() => isLoadingHistory = false);
+      debugPrint("My SOS error: $e");
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    loadDoctors();
+    _loadMySos();
+  }
+
+  @override
+  void dispose() {
+    detailsController.dispose();
+    super.dispose();
+  }
+
+  // ── Send alert ───────────────────────────────────────────
+
+  Future<void> sendAlert() async {
+    if (selectedDoctor == null || detailsController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("Please complete all required fields"),
+          backgroundColor: AppColors.blueColor,
+        ),
+      );
+      return;
+    }
+
+    setState(() => isSending = true);
+
+    try {
+      await ApiService.createSos(
+        doctorId: selectedDoctor!.id,
+        updateType: selectedType, // ✅ بيتبعت مباشرة
+        severity: selectedSeverity,
+        details: detailsController.text.trim(),
+      );
+
+      setState(() {
+        detailsController.clear();
+        selectedSeverity = "medium";
+        selectedType = "chest_pain";
+        isSending = false;
+      });
+
+      // ✅ reload التاريخ من الـ API
+      await _loadMySos();
+
+      if (!mounted) return;
+      showSuccessDialog();
+    } catch (e) {
+      setState(() => isSending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Failed to send SOS: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void showSuccessDialog() {
     showDialog(
       context: context,
       builder: (_) {
@@ -225,20 +274,16 @@ Future<void> sendAlert() async {
                 const Text(
                   "Update Sent Successfully",
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   "Your update has been sent to ${selectedDoctor?.name ?? 'the doctor'}.",
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade700,
-                    height: 1.5,
-                  ),
+                      fontSize: 14,
+                      color: Colors.grey.shade700,
+                      height: 1.5),
                 ),
                 const SizedBox(height: 20),
                 SizedBox(
@@ -250,8 +295,7 @@ Future<void> sendAlert() async {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
+                          borderRadius: BorderRadius.circular(18)),
                     ),
                     onPressed: () => Navigator.pop(context),
                     child: const Text("Done"),
@@ -264,6 +308,8 @@ Future<void> sendAlert() async {
       },
     );
   }
+
+  // ── UI helpers ───────────────────────────────────────────
 
   Widget buildSectionCard({
     required String title,
@@ -293,11 +339,7 @@ Future<void> sendAlert() async {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: AppColors.blueColor.withOpacity(.1),
-                child: Icon(
-                  icon,
-                  color: AppColors.blueColor,
-                  size: 20,
-                ),
+                child: Icon(icon, color: AppColors.blueColor, size: 20),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -330,24 +372,22 @@ Future<void> sendAlert() async {
       borderRadius: BorderRadius.circular(18),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.blueColor.withOpacity(.18)),
+          border:
+              Border.all(color: AppColors.blueColor.withOpacity(.18)),
         ),
         child: Row(
           children: [
             Icon(icon, color: AppColors.blueColor),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              child: Text(value,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w500)),
             ),
             const Icon(Icons.keyboard_arrow_down_rounded),
           ],
@@ -373,47 +413,39 @@ Future<void> sendAlert() async {
                 width: 45,
                 height: 5,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(20),
-                ),
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(20)),
               ),
               const SizedBox(height: 18),
-              Row(
-                children: [
-                  Icon(Icons.medical_services_outlined,
-                      color: AppColors.blueColor),
-                  const SizedBox(width: 8),
-                  const Text(
-                    "Choose Doctor",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
+              Row(children: [
+                Icon(Icons.medical_services_outlined,
+                    color: AppColors.blueColor),
+                const SizedBox(width: 8),
+                const Text("Choose Doctor",
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ]),
               const SizedBox(height: 18),
               ...doctors.map((doctor) {
                 final isSelected = selectedDoctor?.id == doctor.id;
-
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(
                     backgroundColor: AppColors.blueColor.withOpacity(.1),
-                    child: Icon(Icons.person, color: AppColors.blueColor),
+                    child:
+                        Icon(Icons.person, color: AppColors.blueColor),
                   ),
-                  title: Text(
-                    doctor.name,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                  title: Text(doctor.name,
+                      style:
+                          const TextStyle(fontWeight: FontWeight.w600)),
                   subtitle: Text(doctor.specialty),
                   trailing: isSelected
-                      ? Icon(Icons.check_circle, color: AppColors.blueColor)
-                      : const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                      ? Icon(Icons.check_circle,
+                          color: AppColors.blueColor)
+                      : const Icon(Icons.arrow_forward_ios_rounded,
+                          size: 16),
                   onTap: () {
-                    setState(() {
-                      selectedDoctor = doctor;
-                    });
+                    setState(() => selectedDoctor = doctor);
                     Navigator.pop(context);
                   },
                 );
@@ -442,42 +474,32 @@ Future<void> sendAlert() async {
                 width: 45,
                 height: 5,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(20),
-                ),
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(20)),
               ),
               const SizedBox(height: 18),
-              Row(
-                children: [
-                  Icon(Icons.report_gmailerrorred_outlined,
-                      color: AppColors.blueColor),
-                  const SizedBox(width: 8),
-                  const Text(
-                    "Choose Update Type",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
+              Row(children: [
+                Icon(Icons.report_gmailerrorred_outlined,
+                    color: AppColors.blueColor),
+                const SizedBox(width: 8),
+                const Text("Choose Update Type",
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ]),
               const SizedBox(height: 18),
               ...alertTypes.map((type) {
                 final isSelected = selectedType == type;
-
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    type,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                  title: Text(displayAlertType(type),
+                      style:
+                          const TextStyle(fontWeight: FontWeight.w600)),
                   trailing: isSelected
-                      ? Icon(Icons.check_circle, color: AppColors.blueColor)
+                      ? Icon(Icons.check_circle,
+                          color: AppColors.blueColor)
                       : null,
                   onTap: () {
-                    setState(() {
-                      selectedType = type;
-                    });
+                    setState(() => selectedType = type);
                     Navigator.pop(context);
                   },
                 );
@@ -491,23 +513,15 @@ Future<void> sendAlert() async {
 
   Widget buildSeveritySelector() {
     final levels = ["low", "medium", "high"];
-
     return Row(
       children: levels.map((level) {
         final selected = selectedSeverity == level;
         final color = severityColor(level);
-
         return Expanded(
           child: GestureDetector(
-            onTap: () {
-              setState(() {
-                selectedSeverity = level;
-              });
-            },
+            onTap: () => setState(() => selectedSeverity = level),
             child: Container(
-              margin: EdgeInsets.only(
-                right: level != "high" ? 8 : 0,
-              ),
+              margin: EdgeInsets.only(right: level != "high" ? 8 : 0),
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
                 color: selected ? color : color.withOpacity(.08),
@@ -530,97 +544,95 @@ Future<void> sendAlert() async {
     );
   }
 
-  Widget buildSentItem(PatientAlertItem item) {
+  Widget _buildTag(String text, Color bg, Color fg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+          color: bg, borderRadius: BorderRadius.circular(14)),
+      child: Text(text,
+          style: TextStyle(
+              color: fg, fontWeight: FontWeight.w700, fontSize: 11)),
+    );
+  }
+
+  // ✅ Real SOS history item
+  Widget _buildSosHistoryItem(SentSosItem item) {
+    final sevColor = _severityColorFor(item.severity);
+    final statusColor =
+        item.isResolved ? const Color(0xFF27AE60) : const Color(0xFFE74C3C);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FBFF),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.blueColor.withOpacity(.08)),
+        border:
+            Border.all(color: AppColors.blueColor.withOpacity(.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Doctor + time
           Row(
             children: [
               CircleAvatar(
                 radius: 18,
                 backgroundColor: AppColors.blueColor.withOpacity(.1),
-                child: Icon(
-                  Icons.person_outline,
-                  color: AppColors.blueColor,
-                  size: 18,
-                ),
+                child: Icon(Icons.medical_services_outlined,
+                    color: AppColors.blueColor, size: 18),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  item.doctorName,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.doctorName,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 15)),
+                    if (item.doctorEmail.isNotEmpty)
+                      Text(item.doctorEmail,
+                          style: TextStyle(
+                              color: Colors.grey.shade500, fontSize: 12)),
+                  ],
                 ),
               ),
-              Text(
-                item.time,
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 12,
-                ),
-              ),
+              Text(_formatTimeAgo(item.createdAt),
+                  style: TextStyle(
+                      color: Colors.grey.shade500, fontSize: 12)),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+
+          // ── Tags
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
             children: [
               _buildTag(
-                item.type,
+                displayAlertType(item.updateType),
                 AppColors.blueColor.withOpacity(.12),
                 AppColors.blueColor,
               ),
-              const SizedBox(width: 8),
               _buildTag(
                 item.severity.toUpperCase(),
-                severityColor(item.severity).withOpacity(.12),
-                severityColor(item.severity),
+                sevColor.withOpacity(.12),
+                sevColor,
               ),
-              const SizedBox(width: 8),
               _buildTag(
-                item.status.toUpperCase(),
-                statusColor(item.status).withOpacity(.12),
-                statusColor(item.status),
+                item.isResolved ? 'RESOLVED' : 'ACTIVE',
+                statusColor.withOpacity(.12),
+                statusColor,
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            item.details,
-            style: TextStyle(
-              color: Colors.grey.shade800,
-              height: 1.45,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildTag(String text, Color bg, Color fg) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: fg,
-          fontWeight: FontWeight.w700,
-          fontSize: 12,
-        ),
+          // ── Details
+          Text(item.details,
+              style: TextStyle(
+                  color: Colors.grey.shade800, height: 1.45)),
+        ],
       ),
     );
   }
@@ -643,11 +655,19 @@ Future<void> sendAlert() async {
           ),
         ),
         iconTheme: IconThemeData(color: AppColors.blueColor),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh_rounded, color: AppColors.blueColor),
+            onPressed: _loadMySos,
+            tooltip: "Refresh history",
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.only(bottom: 24),
         child: Column(
           children: [
+            // ── Send form
             buildSectionCard(
               title: "Send New Update to Doctor",
               icon: Icons.send_outlined,
@@ -663,7 +683,7 @@ Future<void> sendAlert() async {
                   buildPickerField(
                     title: "Type",
                     icon: Icons.report_gmailerrorred_outlined,
-                    value: selectedType,
+                    value: displayAlertType(selectedType),
                     onTap: showAlertTypesSheet,
                   ),
                   const SizedBox(height: 14),
@@ -695,15 +715,12 @@ Future<void> sendAlert() async {
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(18),
                         borderSide: BorderSide(
-                          color: AppColors.blueColor.withOpacity(.18),
-                        ),
+                            color: AppColors.blueColor.withOpacity(.18)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(18),
-                        borderSide: BorderSide(
-                          color: AppColors.blueColor,
-                          width: 1.8,
-                        ),
+                        borderSide:
+                            BorderSide(color: AppColors.blueColor, width: 1.8),
                       ),
                       contentPadding: const EdgeInsets.all(16),
                     ),
@@ -712,45 +729,59 @@ Future<void> sendAlert() async {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: sendAlert,
-                      icon: const Icon(Icons.send_rounded),
-                      label: const Text(
-                        "Send to Doctor",
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
+                      onPressed: isSending ? null : sendAlert,
+                      icon: isSending
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.send_rounded),
+                      label: Text(
+                        isSending ? "Sending..." : "Send to Doctor",
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 15),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.blueColor,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
+                            borderRadius: BorderRadius.circular(18)),
                       ),
                     ),
                   ),
                 ],
               ),
             ),
+
+            // ── History from API
             buildSectionCard(
               title: "Previously Sent Updates",
               icon: Icons.history_outlined,
-              child: sentAlerts.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Text(
-                        "No updates sent yet",
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
+              child: isLoadingHistory
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(child: CircularProgressIndicator()),
                     )
-                  : Column(
-                      children: sentAlerts
-                          .map((item) => buildSentItem(item))
-                          .toList(),
-                    ),
+                  : sentSosHistory.isEmpty
+                      ? Padding(
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 16),
+                          child: Text(
+                            "No updates sent yet",
+                            style:
+                                TextStyle(color: Colors.grey.shade600),
+                          ),
+                        )
+                      : Column(
+                          children: sentSosHistory
+                              .map(_buildSosHistoryItem)
+                              .toList(),
+                        ),
             ),
           ],
         ),
@@ -758,11 +789,3 @@ Future<void> sendAlert() async {
     );
   }
 }
-
-
-
-
-
-
-
-

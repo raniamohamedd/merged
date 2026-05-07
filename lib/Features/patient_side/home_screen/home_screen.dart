@@ -232,6 +232,10 @@ Future<void> _forceAddMedication({
       final data = await ApiService.getMyMedications();
       final loaded = data.map<Map<String, dynamic>>((item) {
         return {
+
+
+
+          
 "iddelete": item["medicineId"]?["_id"] ?? item["_id"],
           "id": item["id"],
           "name": item["medicationName"] ?? "",
@@ -358,13 +362,13 @@ Future<void> _forceAddMedication({
         title: 'Did you take ${med["name"]}?',
         body: 'Please confirm your dose',
         scheduledTime: followUpTime,
-        payload: jsonEncode({
-          "type": "dose_confirmation",
-          "medicationId": med["id"],
-          "medicationName": med["name"],
-          "dosage": med["dosage"],
-          "scheduledTime": followUpTime.toString(),
-        }),
+payload: jsonEncode({
+  "type": "dose_confirmation",
+  "medicationId": med["iddelete"],  // ✅ correct _id
+  "medicationName": med["name"],
+  "dosage": med["dosage"],
+  "scheduledTime": followUpTime.toString(),
+}),
       );
     }
   }

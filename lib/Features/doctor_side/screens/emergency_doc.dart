@@ -9,7 +9,7 @@ class EmergencyCase {
   final String patientId;
   final String patientName;
   final String time;
-  final DateTime createdAt; // ✅ للترتيب الصحيح
+  final DateTime createdAt;
   final String alertType;
   final String status;
   final String severity;
@@ -34,11 +34,26 @@ class EmergencyCase {
       patientId: json['patientId']['_id'],
       patientName: json['patientId']['fullName'] ?? 'Unknown',
       time: timeago.format(created, locale: 'en_short'),
-      createdAt: created, // ✅ حفظ الوقت الحقيقي للترتيب
-      alertType: json['updateType'] ?? 'other',
+      createdAt: created,
+      alertType: json['updateType'],
       status: json['isResolved'] ? 'resolved' : 'active',
       severity: 'high',
       details: json['details'] ?? '',
+    );
+  }
+
+  // ✅ copyWith لتغيير الـ status محلياً
+  EmergencyCase copyWith({String? status}) {
+    return EmergencyCase(
+      id: id,
+      patientId: patientId,
+      patientName: patientName,
+      time: time,
+      createdAt: createdAt,
+      alertType: alertType,
+      status: status ?? this.status,
+      severity: severity,
+      details: details,
     );
   }
 }
@@ -55,13 +70,11 @@ class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
   bool isLoading = true;
 
   Future<void> loadSos() async {
+    setState(() => isLoading = true);
     try {
       final data = await ApiService.getSos();
       final cases = data.map((e) => EmergencyCase.fromJson(e)).toList();
-
-      // ✅ ترتيب من الأحدث للأقدم (الأحدث في الأعلى - منطقي)
       cases.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
       setState(() {
         emergencyCases = cases;
         isLoading = false;
@@ -83,6 +96,16 @@ class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
       emergencyCases.where((e) => e.status == 'resolved').length;
   int get highCount =>
       emergencyCases.where((e) => e.severity == 'high').length;
+
+  // ✅ callback لما يتحل الـ SOS — بيغيّر محلياً بدون reload
+  void _onResolved(String sosId) {
+    setState(() {
+      final index = emergencyCases.indexWhere((e) => e.id == sosId);
+      if (index != -1) {
+        emergencyCases[index] = emergencyCases[index].copyWith(status: 'resolved');
+      }
+    });
+  }
 
   Color severityColor(String severity) {
     switch (severity) {
@@ -206,12 +229,12 @@ class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
       ),
       child: Column(
         children: [
+          // ── Header row
           Row(
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor:
-                    severityColor(ec.severity).withOpacity(.10),
+                backgroundColor: severityColor(ec.severity).withOpacity(.10),
                 child: Icon(
                   Icons.warning_amber_rounded,
                   color: severityColor(ec.severity),
@@ -247,6 +270,7 @@ class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
                   ],
                 ),
               ),
+              // Severity + Status chips
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -287,7 +311,10 @@ class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
               ),
             ],
           ),
+
           const SizedBox(height: 14),
+
+          // ── Alert type
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
@@ -300,6 +327,8 @@ class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
             ),
           ),
           const SizedBox(height: 8),
+
+          // ── Details
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
@@ -310,32 +339,51 @@ class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
                   color: Colors.grey.shade700, fontSize: 13, height: 1.45),
             ),
           ),
+
           const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (_) =>
-                      EmergencyCaseDialog(emergencyCase: ec),
-                );
-              },
-              icon: const Icon(Icons.remove_red_eye_outlined, size: 18),
-              label: const Text(
-                'View Case Details',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.blueColor,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+
+          // ── Buttons
+          Row(
+            children: [
+              // View Details
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) =>
+                          EmergencyCaseDialog(emergencyCase: ec),
+                    );
+                  },
+                  icon: const Icon(Icons.remove_red_eye_outlined, size: 18),
+                  label: const Text(
+                    'View Details',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.blueColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
                 ),
               ),
-            ),
+
+              // ✅ Resolve button — بيظهر بس لو active
+              if (ec.status == 'active') ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _ResolveButton(
+                    sosId: ec.id,
+                    onResolved: () => _onResolved(ec.id),
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),
@@ -350,8 +398,8 @@ class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
       decoration: BoxDecoration(
         color: const Color(0xFFE74C3C).withOpacity(.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-            color: const Color(0xFFE74C3C).withOpacity(.14)),
+        border:
+            Border.all(color: const Color(0xFFE74C3C).withOpacity(.14)),
       ),
       child: Row(
         children: [
@@ -451,10 +499,10 @@ class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
                         ],
                       ),
                     ),
-                    // ✅ زر Refresh
                     IconButton(
                       onPressed: loadSos,
-                      icon: const Icon(Icons.refresh, color: Colors.white),
+                      icon:
+                          const Icon(Icons.refresh, color: Colors.white),
                     ),
                   ],
                 ),
@@ -521,8 +569,9 @@ class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
                           )
                         : _softCard(
                             child: Column(
-                              children:
-                                  emergencyCases.map(buildEmergencyCard).toList(),
+                              children: emergencyCases
+                                  .map(buildEmergencyCard)
+                                  .toList(),
                             ),
                           ),
                   ],
@@ -530,6 +579,81 @@ class _EmergencyCasesPageState extends State<EmergencyCasesPage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ========== Resolve Button ==========
+class _ResolveButton extends StatefulWidget {
+  final String sosId;
+  final VoidCallback onResolved;
+
+  const _ResolveButton({
+    required this.sosId,
+    required this.onResolved,
+  });
+
+  @override
+  State<_ResolveButton> createState() => _ResolveButtonState();
+}
+
+class _ResolveButtonState extends State<_ResolveButton> {
+  bool isLoading = false;
+
+  Future<void> _resolve() async {
+    setState(() => isLoading = true);
+    try {
+      await ApiService.resolveSos(widget.sosId);
+      if (!mounted) return;
+      widget.onResolved();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(' Case resolved'),
+          backgroundColor: const Color(0xFF27AE60),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton.icon(
+      onPressed: isLoading ? null : _resolve,
+      icon: isLoading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Colors.white),
+            )
+          : const Icon(Icons.check_circle_outline, size: 18),
+      label: Text(
+        isLoading ? '...' : 'Resolve',
+        style:
+            const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF27AE60),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
         ),
       ),
     );
@@ -554,7 +678,9 @@ class EmergencyCaseDialog extends StatelessWidget {
   }
 
   Color statusColor(String status) =>
-      status == 'active' ? const Color(0xFFE74C3C) : const Color(0xFF27AE60);
+      status == 'active'
+          ? const Color(0xFFE74C3C)
+          : const Color(0xFF27AE60);
 
   @override
   Widget build(BuildContext context) {
@@ -589,8 +715,7 @@ class EmergencyCaseDialog extends StatelessWidget {
               const Text(
                 'Emergency Case Details',
                 textAlign: TextAlign.center,
-                style:
-                    TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 18),
               _detailRow('Patient', emergencyCase.patientName),

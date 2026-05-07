@@ -6,171 +6,174 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/core/services/api_service.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:permission_handler/permission_handler.dart';
 
-// class AppColors {
-//   static const Color blueColor = Color(0xFF1565C0);
-// }
-
-class Reportscreen extends StatefulWidget {
-  const Reportscreen({super.key});
+class PatientReportScreen extends StatefulWidget {
+  const PatientReportScreen({super.key});
 
   @override
-  State<Reportscreen> createState() => _ReportscreenState();
+  State<PatientReportScreen> createState() => _PatientReportScreenState();
 }
 
-class _ReportscreenState extends State<Reportscreen> {
+class _PatientReportScreenState extends State<PatientReportScreen> {
+  bool isLoading = true;
   bool isGenerating = false;
+  Map<String, dynamic> summary = {};
+  List<dynamic> logs = [];
+  String errorMessage = '';
+  String selectedStatus = 'all';
 
-  final GlobalKey _bloodPressureKey = GlobalKey();
-  final GlobalKey _glucoseKey = GlobalKey();
-  final GlobalKey _adherenceKey = GlobalKey();
+  final GlobalKey _pieKey = GlobalKey();
 
+  @override
+  void initState() {
+    super.initState();
+    _loadReport();
+  }
+
+  Future<void> _loadReport() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = '';
+    });
+    try {
+      final data = await ApiService.getPatientReport();
+      setState(() {
+        summary = data["summary"] ?? {};
+        logs = data["logs"] ?? [];
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        errorMessage = e.toString();
+        isLoading = false;
+      });
+    }
+  }
+
+  List<dynamic> get filteredLogs {
+    if (selectedStatus == 'all') return logs;
+    return logs.where((l) => l["status"] == selectedStatus).toList();
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'taken':
+        return const Color(0xFF27AE60);
+      case 'missed':
+        return const Color(0xFFE74C3C);
+      default:
+        return const Color(0xFFF39C12);
+    }
+  }
+
+  IconData _statusIcon(String status) {
+    switch (status) {
+      case 'taken':
+        return Icons.check_circle_rounded;
+      case 'missed':
+        return Icons.cancel_rounded;
+      default:
+        return Icons.access_time_rounded;
+    }
+  }
+
+  String _formatTime(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+      final m = dt.minute.toString().padLeft(2, '0');
+      final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+      return '$h:$m $ampm';
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  String _formatDate(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.day}/${dt.month}/${dt.year}';
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  // ── PDF
   Future<bool> _requestStoragePermission() async {
     if (Platform.isAndroid) {
       final status = await Permission.storage.request();
       if (status.isGranted) return true;
-
-      final manageStatus = await Permission.manageExternalStorage.request();
-      return manageStatus.isGranted;
+      return (await Permission.manageExternalStorage.request()).isGranted;
     }
     return true;
   }
 
   Future<Uint8List?> _captureWidget(GlobalKey key) async {
     try {
-      final context = key.currentContext;
-      if (context == null) return null;
-
-      final boundary =
-          context.findRenderObject() as RenderRepaintBoundary?;
+      final ctx = key.currentContext;
+      if (ctx == null) return null;
+      final boundary = ctx.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null) return null;
-
-      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData =
-          await image.toByteData(format: ui.ImageByteFormat.png);
-
-      return byteData?.buffer.asUint8List();
-    } catch (e) {
-      debugPrint("Capture error: $e");
+      final img = await boundary.toImage(pixelRatio: 3.0);
+      final bd = await img.toByteData(format: ui.ImageByteFormat.png);
+      return bd?.buffer.asUint8List();
+    } catch (_) {
       return null;
     }
   }
 
   Future<Directory> _getSaveDirectory() async {
     if (Platform.isAndroid) {
-      final downloadDir = Directory('/storage/emulated/0/Download');
-      if (await downloadDir.exists()) {
-        return downloadDir;
-      }
+      final d = Directory('/storage/emulated/0/Download');
+      if (await d.exists()) return d;
     }
-
-    final docsDir = await getApplicationDocumentsDirectory();
-    return docsDir;
+    return await getApplicationDocumentsDirectory();
   }
 
-  Future<void> generateAndSavePdf() async {
+  Future<void> _generatePdf() async {
+    setState(() => isGenerating = true);
     try {
-      setState(() {
-        isGenerating = true;
-      });
-
-      final hasPermission = await _requestStoragePermission();
-      if (!hasPermission) {
+      if (!await _requestStoragePermission()) {
         throw Exception("Storage permission denied");
       }
-
       await Future.delayed(const Duration(milliseconds: 300));
+      final pieImage = await _captureWidget(_pieKey);
 
-      final bloodPressureImage = await _captureWidget(_bloodPressureKey);
-      final glucoseImage = await _captureWidget(_glucoseKey);
-      final adherenceImage = await _captureWidget(_adherenceKey);
+      final taken = summary["taken"] ?? 0;
+      final missed = summary["missed"] ?? 0;
+      final pending = summary["pending"] ?? 0;
+      final adherence = summary["adherenceRate"] ?? "0%";
+      final activeMeds = summary["activeMedications"] ?? 0;
+      final total = summary["total"] ?? 0;
 
       final pdf = pw.Document();
 
-      final bloodPressureTable = [
-        ['Day', 'Systolic', 'Diastolic'],
-        ['Mon', '120', '80'],
-        ['Tue', '122', '82'],
-        ['Wed', '118', '78'],
-        ['Thu', '124', '81'],
-        ['Fri', '121', '79'],
-        ['Sat', '119', '80'],
-        ['Sun', '117', '77'],
+      final logsTableData = [
+        ['Medication', 'Date', 'Scheduled', 'Status', 'Taken At'],
+        ...logs.map((log) => [
+              log["medicineName"] ?? "Unknown",
+              _formatDate(log["scheduledTime"] ?? ""),
+              _formatTime(log["scheduledTime"] ?? ""),
+              (log["status"] ?? "pending").toString(),
+              log["takenAt"] != null ? _formatTime(log["takenAt"]) : "-",
+            ]),
       ];
-
-      final glucoseTable = [
-        ['Date', 'Glucose (mg/dL)'],
-        ['Sep 25', '105'],
-        ['Sep 26', '98'],
-        ['Sep 27', '110'],
-        ['Sep 28', '102'],
-        ['Sep 29', '108'],
-        ['Sep 30', '95'],
-        ['Oct 01', '103'],
-      ];
-
-      final adherenceTable = [
-        ['Day', 'Adherence %'],
-        ['Mon', '100'],
-        ['Tue', '100'],
-        ['Wed', '75'],
-        ['Thu', '100'],
-        ['Fri', '100'],
-        ['Sat', '100'],
-        ['Sun', '100'],
-      ];
-
-      pw.Widget buildSectionTitle(String text) {
-        return pw.Padding(
-          padding: const pw.EdgeInsets.only(bottom: 8, top: 14),
-          child: pw.Text(
-            text,
-            style: pw.TextStyle(
-              fontSize: 16,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColors.blue800,
-            ),
-          ),
-        );
-      }
-
-      pw.Widget buildTable(List<List<String>> data) {
-        return pw.TableHelper.fromTextArray(
-          headers: data.first,
-          data: data.sublist(1),
-          border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.7),
-          headerStyle: pw.TextStyle(
-            fontWeight: pw.FontWeight.bold,
-            color: PdfColors.white,
-            fontSize: 10,
-          ),
-          headerDecoration: const pw.BoxDecoration(
-            color: PdfColors.blue700,
-          ),
-          cellStyle: const pw.TextStyle(
-            fontSize: 10,
-          ),
-          cellAlignment: pw.Alignment.center,
-          headerAlignment: pw.Alignment.center,
-          cellPadding: const pw.EdgeInsets.all(6),
-          headerPadding: const pw.EdgeInsets.all(8),
-        );
-      }
 
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(24),
-          build: (context) => [
+          build: (ctx) => [
             pw.Center(
               child: pw.Text(
-                'Health Report',
+                'My Medication Report',
                 style: pw.TextStyle(
-                  fontSize: 24,
+                  fontSize: 22,
                   fontWeight: pw.FontWeight.bold,
                   color: PdfColors.blue900,
                 ),
@@ -179,134 +182,115 @@ class _ReportscreenState extends State<Reportscreen> {
             pw.SizedBox(height: 6),
             pw.Center(
               child: pw.Text(
-                "Weekly health analytics summary",
-                style: pw.TextStyle(
-                  fontSize: 11,
-                  color: PdfColors.grey700,
-                ),
+                'Daily medication adherence summary — Generated by MedPal',
+                style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
               ),
             ),
             pw.SizedBox(height: 20),
 
+            // Summary row
             pw.Container(
               padding: const pw.EdgeInsets.all(12),
               decoration: pw.BoxDecoration(
-                color: PdfColors.grey100,
+                color: PdfColors.blue50,
                 borderRadius: pw.BorderRadius.circular(10),
-                border: pw.Border.all(color: PdfColors.grey300),
+                border: pw.Border.all(color: PdfColors.blue200),
               ),
               child: pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
                 children: [
-                  _pdfSummaryItem("Avg Blood Pressure", "120/80 mmHg", PdfColors.blue),
-                  _pdfSummaryItem("Avg Glucose", "103 mg/dL", PdfColors.orange),
-                  _pdfSummaryItem("Med Adherence", "96%", PdfColors.purple),
-                  _pdfSummaryItem("Weight", "75 kg", PdfColors.green),
+                  _pdfItem("Adherence", adherence, PdfColors.purple),
+                  _pdfItem("Total", "$total", PdfColors.blue700),
+                  _pdfItem("Taken", "$taken", PdfColors.green),
+                  _pdfItem("Missed", "$missed", PdfColors.red),
+                  _pdfItem("Pending", "$pending", PdfColors.orange),
+                  _pdfItem("Active Meds", "$activeMeds", PdfColors.teal),
                 ],
               ),
             ),
+            pw.SizedBox(height: 20),
 
-            buildSectionTitle("Blood Pressure Overview"),
-            pw.Text(
-              "Recent readings for the last 7 days.",
-              style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
-            ),
-            pw.SizedBox(height: 8),
-            if (bloodPressureImage != null)
+            // Pie chart
+            if (pieImage != null) ...[
+              pw.Text(
+                'Status Distribution',
+                style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.blue800),
+              ),
+              pw.SizedBox(height: 8),
               pw.Container(
-                height: 180,
+                height: 200,
                 padding: const pw.EdgeInsets.all(8),
                 decoration: pw.BoxDecoration(
                   border: pw.Border.all(color: PdfColors.grey300),
                   borderRadius: pw.BorderRadius.circular(8),
                 ),
-                child: pw.Image(pw.MemoryImage(bloodPressureImage)),
+                child: pw.Image(pw.MemoryImage(pieImage)),
               ),
-            pw.SizedBox(height: 8),
-            buildTable(bloodPressureTable),
+              pw.SizedBox(height: 16),
+            ],
 
-            buildSectionTitle("Glucose Levels"),
+            // Logs table
             pw.Text(
-              "Morning readings in mg/dL.",
-              style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+              'Medication Log Details',
+              style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.blue800),
             ),
             pw.SizedBox(height: 8),
-            if (glucoseImage != null)
-              pw.Container(
-                height: 180,
-                padding: const pw.EdgeInsets.all(8),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.grey300),
-                  borderRadius: pw.BorderRadius.circular(8),
-                ),
-                child: pw.Image(pw.MemoryImage(glucoseImage)),
+            pw.TableHelper.fromTextArray(
+              headers: logsTableData.first,
+              data: logsTableData.sublist(1),
+              border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.7),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.white,
+                fontSize: 9,
               ),
-            pw.SizedBox(height: 8),
-            buildTable(glucoseTable),
-
-            buildSectionTitle("Medication Adherence"),
-            pw.Text(
-              "Daily adherence percentage.",
-              style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+              headerDecoration:
+                  const pw.BoxDecoration(color: PdfColors.blue700),
+              cellStyle: const pw.TextStyle(fontSize: 9),
+              cellAlignment: pw.Alignment.center,
+              headerAlignment: pw.Alignment.center,
+              cellPadding: const pw.EdgeInsets.all(5),
+              headerPadding: const pw.EdgeInsets.all(7),
             ),
-            pw.SizedBox(height: 8),
-            if (adherenceImage != null)
-              pw.Container(
-                height: 180,
-                padding: const pw.EdgeInsets.all(8),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.grey300),
-                  borderRadius: pw.BorderRadius.circular(8),
-                ),
-                child: pw.Image(pw.MemoryImage(adherenceImage)),
-              ),
-            pw.SizedBox(height: 8),
-            buildTable(adherenceTable),
 
             pw.SizedBox(height: 20),
             pw.Divider(),
             pw.Text(
               "Generated by MedPal App",
-              style: pw.TextStyle(
-                fontSize: 10,
-                color: PdfColors.grey600,
-              ),
+              style: pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
             ),
           ],
         ),
       );
 
-      final saveDir = await _getSaveDirectory();
-      if (!await saveDir.exists()) {
-        await saveDir.create(recursive: true);
-      }
-
-      final file = File('${saveDir.path}/health_report.pdf');
+      final dir = await _getSaveDirectory();
+      if (!await dir.exists()) await dir.create(recursive: true);
+      final file = File('${dir.path}/medication_report.pdf');
       await file.writeAsBytes(await pdf.save());
 
       if (!mounted) return;
-
-      setState(() {
-        isGenerating = false;
-      });
-
+      setState(() => isGenerating = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('PDF saved successfully:\n${file.path}'),
+          content: Text('✅ PDF saved:\n${file.path}'),
           backgroundColor: AppColors.blueColor,
           behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-
-      setState(() {
-        isGenerating = false;
-      });
-
+      setState(() => isGenerating = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('PDF generation error: $e'),
+          content: Text('PDF error: $e'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),
@@ -316,646 +300,455 @@ class _ReportscreenState extends State<Reportscreen> {
 
   @override
   Widget build(BuildContext context) {
+    final taken = summary["taken"] ?? 0;
+    final missed = summary["missed"] ?? 0;
+    final pending = summary["pending"] ?? 0;
+    final total = summary["total"] ?? 0;
+    final adherence = summary["adherenceRate"] ?? '0%';
+    final activeMeds = summary["activeMedications"] ?? 0;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF9F9F9),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+      appBar: AppBar(
+        toolbarHeight: 100,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black,
+        title: Row(
           children: [
-            const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 20),
+            
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppColors.blueColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
+                  Icon(Icons.bar_chart_rounded,
+                      color: AppColors.blueColor, size: 18),
+                  const SizedBox(width: 6),
                   Text(
-                    "Health Reports",
+                    "My Report",
                     style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
                       color: AppColors.blueColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
                   ),
                 ],
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.only(left: 10, top: 2, bottom: 10),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Health Overview',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text("Last week's data"),
-                  ],
-                ),
-              ),
-            ),
-            Align(
-              alignment: Alignment.center,
-              child: ElevatedButton.icon(
-                icon: isGenerating
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.picture_as_pdf, color: Colors.white),
-                label: Text(
-                  isGenerating ? "Generating PDF..." : "Download PDF Report",
-                  style: const TextStyle(color: Colors.white),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.blueColor,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 60,
-                    vertical: 12,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                onPressed: isGenerating ? null : generateAndSavePdf,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            Card(
-              color: Colors.white,
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Blood Pressure",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      "Recent readings (7 days)",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 16),
-                    RepaintBoundary(
-                      key: _bloodPressureKey,
-                      child: Container(
-                        color: Colors.white,
-                        child: const AnimatedBloodPressureChart(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _legendItem(Colors.green, "Diastolic"),
-                        const SizedBox(width: 16),
-                        _legendItem(Colors.blue, "Systolic"),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            Card(
-              color: Colors.white,
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Glucose Levels",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      "Morning Readings (mg/dL)",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 16),
-                    RepaintBoundary(
-                      key: _glucoseKey,
-                      child: Container(
-                        color: Colors.white,
-                        child: SizedBox(
-                          height: 220,
-                          child: LineChart(
-                            LineChartData(
-                              minY: 80,
-                              maxY: 120,
-                              gridData: FlGridData(
-                                show: true,
-                                horizontalInterval: 10,
-                              ),
-                              borderData: FlBorderData(
-                                show: true,
-                                border: const Border(
-                                  left: BorderSide(color: Colors.grey),
-                                  bottom: BorderSide(color: Colors.grey),
-                                  right: BorderSide(color: Colors.transparent),
-                                  top: BorderSide(color: Colors.transparent),
-                                ),
-                              ),
-                              titlesData: FlTitlesData(
-                                topTitles: AxisTitles(
-                                  sideTitles: SideTitles(showTitles: false),
-                                ),
-                                rightTitles: AxisTitles(
-                                  sideTitles: SideTitles(showTitles: false),
-                                ),
-                                leftTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    interval: 10,
-                                    reservedSize: 35,
-                                    getTitlesWidget: (value, meta) {
-                                      return Text(
-                                        value.toInt().toString(),
-                                        style: const TextStyle(fontSize: 12),
-                                      );
-                                    },
-                                  ),
-                                ),
-                                bottomTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    interval: 2,
-                                    getTitlesWidget: (value, meta) {
-                                      const labels = {
-                                        0: 'Sep 25',
-                                        2: 'Sep 27',
-                                        4: 'Sep 29',
-                                        6: 'Oct 01',
-                                      };
-                                      return Padding(
-                                        padding: const EdgeInsets.only(top: 8),
-                                        child: Text(
-                                          labels[value.toInt()] ?? '',
-                                          style: const TextStyle(fontSize: 12),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                              lineBarsData: [
-                                LineChartBarData(
-                                  spots: const [
-                                    FlSpot(0, 105),
-                                    FlSpot(1, 98),
-                                    FlSpot(2, 110),
-                                    FlSpot(3, 102),
-                                    FlSpot(4, 108),
-                                    FlSpot(5, 95),
-                                    FlSpot(6, 103),
-                                  ],
-                                  isCurved: true,
-                                  color: Colors.orange,
-                                  barWidth: 2,
-                                  dotData: FlDotData(show: true),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _legendItem(Colors.orange, "Glucose"),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            Card(
-              color: Colors.white,
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Medication Adherence",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      "Adherence Rate",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 16),
-                    RepaintBoundary(
-                      key: _adherenceKey,
-                      child: Container(
-                        color: Colors.white,
-                        child: SizedBox(
-                          height: 220,
-                          child: BarChart(
-                            BarChartData(
-                              maxY: 100,
-                              gridData: FlGridData(
-                                show: true,
-                                horizontalInterval: 25,
-                              ),
-                              borderData: FlBorderData(
-                                show: true,
-                                border: const Border(
-                                  left: BorderSide(color: Colors.grey),
-                                  bottom: BorderSide(color: Colors.grey),
-                                  right: BorderSide(color: Colors.transparent),
-                                  top: BorderSide(color: Colors.transparent),
-                                ),
-                              ),
-                              titlesData: FlTitlesData(
-                                topTitles: AxisTitles(
-                                  sideTitles: SideTitles(showTitles: false),
-                                ),
-                                rightTitles: AxisTitles(
-                                  sideTitles: SideTitles(showTitles: false),
-                                ),
-                                leftTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    interval: 25,
-                                    reservedSize: 35,
-                                    getTitlesWidget: (value, meta) {
-                                      return Text(
-                                        value.toInt().toString(),
-                                        style: const TextStyle(fontSize: 12),
-                                      );
-                                    },
-                                  ),
-                                ),
-                                bottomTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    interval: 1,
-                                    getTitlesWidget: (value, meta) {
-                                      const labels = {
-                                        0: 'Mon',
-                                        1: 'Tue',
-                                        2: 'Wed',
-                                        3: 'Thu',
-                                        4: 'Fri',
-                                        5: 'Sat',
-                                        6: 'Sun',
-                                      };
-                                      return Padding(
-                                        padding: const EdgeInsets.only(top: 8),
-                                        child: Text(
-                                          labels[value.toInt()] ?? '',
-                                          style: const TextStyle(fontSize: 12),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                              barGroups: [
-                                BarChartGroupData(x: 0, barRods: [
-                                  BarChartRodData(
-                                    toY: 100,
-                                    color: Colors.purple,
-                                    width: 12,
-                                  ),
-                                ]),
-                                BarChartGroupData(x: 1, barRods: [
-                                  BarChartRodData(
-                                    toY: 100,
-                                    color: Colors.purple,
-                                    width: 12,
-                                  ),
-                                ]),
-                                BarChartGroupData(x: 2, barRods: [
-                                  BarChartRodData(
-                                    toY: 75,
-                                    color: Colors.purple,
-                                    width: 12,
-                                  ),
-                                ]),
-                                BarChartGroupData(x: 3, barRods: [
-                                  BarChartRodData(
-                                    toY: 100,
-                                    color: Colors.purple,
-                                    width: 12,
-                                  ),
-                                ]),
-                                BarChartGroupData(x: 4, barRods: [
-                                  BarChartRodData(
-                                    toY: 100,
-                                    color: Colors.purple,
-                                    width: 12,
-                                  ),
-                                ]),
-                                BarChartGroupData(x: 5, barRods: [
-                                  BarChartRodData(
-                                    toY: 100,
-                                    color: Colors.purple,
-                                    width: 12,
-                                  ),
-                                ]),
-                                BarChartGroupData(x: 6, barRods: [
-                                  BarChartRodData(
-                                    toY: 100,
-                                    color: Colors.purple,
-                                    width: 12,
-                                  ),
-                                ]),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _legendItem(Colors.purple, "Adherence"),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            GridView.count(
-              crossAxisCount: 2,
-              childAspectRatio: 1.6,
-              shrinkWrap: true,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                summaryCard(
-                  "Avg Blood Pressure",
-                  "120/80 mmHg",
-                  "Normal",
-                  Colors.blue,
-                  Colors.green,
-                ),
-                summaryCard(
-                  "Avg Glucose",
-                  "103 mg/dL",
-                  "Normal",
-                  Colors.amber,
-                  Colors.green,
-                ),
-                summaryCard(
-                  "Med Adherence",
-                  "96%",
-                  "Excellent",
-                  Colors.purple,
-                  Colors.green,
-                ),
-                summaryCard(
-                  "Weight",
-                  "75 kg",
-                  "Stable",
-                  Colors.blue,
-                  Colors.green,
-                ),
-              ],
-            ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-pw.Widget _pdfSummaryItem(String title, String value, PdfColor color) {
-  return pw.Expanded(
-    child: pw.Column(
-      children: [
-        pw.Text(
-          title,
-          textAlign: pw.TextAlign.center,
-          style: pw.TextStyle(
-            fontSize: 9,
-            color: PdfColors.grey700,
-          ),
-        ),
-        pw.SizedBox(height: 4),
-        pw.Text(
-          value,
-          textAlign: pw.TextAlign.center,
-          style: pw.TextStyle(
-            fontSize: 11,
-            fontWeight: pw.FontWeight.bold,
-            color: color,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-Widget _legendItem(Color color, String text) {
-  return Row(
-    children: [
-      Container(
-        width: 8,
-        height: 8,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-        ),
-      ),
-      const SizedBox(width: 6),
-      Text(text, style: const TextStyle(fontSize: 12)),
-    ],
-  );
-}
-
-Widget summaryCard(
-  String title,
-  String value,
-  String status,
-  Color valueColor,
-  Color statusColor,
-) {
-  return Card(
-    color: Colors.white,
-    elevation: 2,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(11),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(title, style: const TextStyle(color: Colors.grey)),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              color: valueColor,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+        actions: [
+          // Download button
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton.icon(
+              onPressed: isGenerating || isLoading ? null : _generatePdf,
+              icon: isGenerating
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.download_rounded,
+                      color: Colors.white, size: 18),
+              label: Text(
+                isGenerating ? "..." : "PDF",
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600),
+              ),
+              style: TextButton.styleFrom(
+                backgroundColor: AppColors.blueColor,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(status, style: TextStyle(color: statusColor)),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: _loadReport,
+          ),
         ],
       ),
-    ),
-  );
-}
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : errorMessage.isNotEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          color: Colors.red, size: 48),
+                      const SizedBox(height: 12),
+                      Text(errorMessage,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.red)),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                          onPressed: _loadReport,
+                          child: const Text("Retry")),
+                    ],
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _loadReport,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(children: [
+                      // ── Adherence Banner
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppColors.blueColor,
+                              AppColors.blueColor.withOpacity(0.7)
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(children: [
+                          Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text("Adherence Rate",
+                                      style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13)),
+                                  const SizedBox(height: 4),
+                                  Text(adherence,
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 36,
+                                          fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 4),
+                                  Text("$activeMeds active medications",
+                                      style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13)),
+                                ]),
+                          ),
+                          const Icon(Icons.verified_rounded,
+                              color: Colors.white, size: 56),
+                        ]),
+                      ),
+                      const SizedBox(height: 16),
 
-class AnimatedBloodPressureChart extends StatefulWidget {
-  const AnimatedBloodPressureChart({super.key});
+                      // ── Stats Row
+                      Row(children: [
+                        _statCard('Total', '$total', AppColors.blueColor,
+                            Icons.list_alt_rounded),
+                        const SizedBox(width: 8),
+                        _statCard('Taken', '$taken',
+                            const Color(0xFF27AE60), Icons.check_circle_rounded),
+                        const SizedBox(width: 8),
+                        _statCard('Missed', '$missed',
+                            const Color(0xFFE74C3C), Icons.cancel_rounded),
+                        const SizedBox(width: 8),
+                        _statCard('Pending', '$pending',
+                            const Color(0xFFF39C12), Icons.access_time_rounded),
+                      ]),
+                      const SizedBox(height: 16),
 
-  @override
-  State<AnimatedBloodPressureChart> createState() =>
-      _AnimatedBloodPressureChartState();
-}
+                      // ── Pie Chart
+                      if (total > 0) ...[
+                        _buildPieChart(taken, missed, pending),
+                        const SizedBox(height: 16),
+                      ],
 
-class _AnimatedBloodPressureChartState
-    extends State<AnimatedBloodPressureChart> {
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 220,
-      child: LineChart(
-        LineChartData(
-          minY: 60,
-          maxY: 140,
-          gridData: FlGridData(
-            show: true,
-            horizontalInterval: 20,
-          ),
-          borderData: FlBorderData(
-            show: true,
-            border: const Border(
-              left: BorderSide(color: Colors.grey),
-              bottom: BorderSide(color: Colors.grey),
-              right: BorderSide(color: Colors.transparent),
-              top: BorderSide(color: Colors.transparent),
-            ),
-          ),
-          titlesData: FlTitlesData(
-            topTitles: AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            rightTitles: AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                interval: 20,
-                reservedSize: 35,
-                getTitlesWidget: (value, meta) {
-                  return Text(
-                    value.toInt().toString(),
-                    style: const TextStyle(fontSize: 12),
-                  );
-                },
-              ),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                interval: 1,
-                getTitlesWidget: (value, meta) {
-                  const labels = {
-                    0: 'Mon',
-                    1: 'Tue',
-                    2: 'Wed',
-                    3: 'Thu',
-                    4: 'Fri',
-                    5: 'Sat',
-                    6: 'Sun',
-                  };
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      labels[value.toInt()] ?? '',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-          lineBarsData: [
-            LineChartBarData(
-              spots: const [
-                FlSpot(0, 80),
-                FlSpot(1, 82),
-                FlSpot(2, 78),
-                FlSpot(3, 81),
-                FlSpot(4, 79),
-                FlSpot(5, 80),
-                FlSpot(6, 77),
-              ],
-              isCurved: true,
-              color: Colors.green,
-              barWidth: 2,
-              dotData: FlDotData(show: true),
-            ),
-            LineChartBarData(
-              spots: const [
-                FlSpot(0, 120),
-                FlSpot(1, 122),
-                FlSpot(2, 118),
-                FlSpot(3, 124),
-                FlSpot(4, 121),
-                FlSpot(5, 119),
-                FlSpot(6, 117),
-              ],
-              isCurved: true,
-              color: Colors.blue,
-              barWidth: 2,
-              dotData: FlDotData(show: true),
-            ),
+                      // ── Logs
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                                color: Colors.black.withOpacity(.04),
+                                blurRadius: 10)
+                          ],
+                        ),
+                        child: Column(children: [
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(children: [
+                              const Icon(Icons.list_alt_rounded,
+                                  color: Colors.blue, size: 20),
+                              const SizedBox(width: 8),
+                              const Text("Medication Logs",
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16)),
+                              const Spacer(),
+                              _filterDropdown(),
+                            ]),
+                          ),
+                          const Divider(height: 1),
+                          if (filteredLogs.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.all(32),
+                              child: Text("No logs found",
+                                  style: TextStyle(color: Colors.grey)),
+                            )
+                          else
+                            ...filteredLogs.map((log) => _buildLogCard(log)),
+                          const SizedBox(height: 8),
+                        ]),
+                      ),
+
+                      const SizedBox(height: 24),
+                    ]),
+                  ),
+                ),
+    );
+  }
+
+  Widget _statCard(
+      String title, String value, Color color, IconData icon) {
+    return Expanded(
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(.04), blurRadius: 8)
           ],
+        ),
+        child: Column(children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 6),
+          Text(value,
+              style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18)),
+          const SizedBox(height: 2),
+          Text(title,
+              style:
+                  const TextStyle(color: Colors.grey, fontSize: 11)),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildPieChart(int taken, int missed, int pending) {
+    final total = taken + missed + pending;
+    return RepaintBoundary(
+      key: _pieKey,
+      child: Container(
+        color: Colors.white,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(.04), blurRadius: 10)
+            ],
+          ),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Row(children: [
+              Icon(Icons.pie_chart_rounded, color: Colors.blue, size: 20),
+              SizedBox(width: 8),
+              Text("Status Overview",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16)),
+            ]),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 180,
+              child: PieChart(PieChartData(
+                centerSpaceRadius: 40,
+                sectionsSpace: 3,
+                sections: [
+                  if (taken > 0)
+                    PieChartSectionData(
+                      value: taken.toDouble(),
+                      color: const Color(0xFF27AE60),
+                      title:
+                          '${((taken / total) * 100).round()}%',
+                      radius: 50,
+                      titleStyle: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12),
+                    ),
+                  if (missed > 0)
+                    PieChartSectionData(
+                      value: missed.toDouble(),
+                      color: const Color(0xFFE74C3C),
+                      title:
+                          '${((missed / total) * 100).round()}%',
+                      radius: 50,
+                      titleStyle: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12),
+                    ),
+                  if (pending > 0)
+                    PieChartSectionData(
+                      value: pending.toDouble(),
+                      color: const Color(0xFFF39C12),
+                      title:
+                          '${((pending / total) * 100).round()}%',
+                      radius: 50,
+                      titleStyle: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12),
+                    ),
+                ],
+              )),
+            ),
+            const SizedBox(height: 12),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              _legendDot(
+                  const Color(0xFF27AE60), 'Taken ($taken)'),
+              const SizedBox(width: 16),
+              _legendDot(
+                  const Color(0xFFE74C3C), 'Missed ($missed)'),
+              const SizedBox(width: 16),
+              _legendDot(
+                  const Color(0xFFF39C12), 'Pending ($pending)'),
+            ]),
+          ]),
         ),
       ),
     );
   }
+
+  Widget _legendDot(Color color, String label) {
+    return Row(children: [
+      Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(3))),
+      const SizedBox(width: 5),
+      Text(label,
+          style: const TextStyle(
+              fontSize: 12, color: Color(0xFF4B5563))),
+    ]);
+  }
+
+  Widget _filterDropdown() {
+    return DropdownButton<String>(
+      value: selectedStatus,
+      underline: const SizedBox(),
+      style: const TextStyle(fontSize: 12, color: Colors.black87),
+      items: const [
+        DropdownMenuItem(value: 'all', child: Text('All')),
+        DropdownMenuItem(value: 'taken', child: Text('Taken')),
+        DropdownMenuItem(value: 'missed', child: Text('Missed')),
+        DropdownMenuItem(
+            value: 'pending', child: Text('Pending')),
+      ],
+      onChanged: (v) => setState(() => selectedStatus = v!),
+    );
+  }
+
+  Widget _buildLogCard(Map<String, dynamic> log) {
+    final status = log["status"] ?? "pending";
+    final color = _statusColor(status);
+    final icon = _statusIcon(status);
+    final name = log["medicineName"] ?? "Unknown";
+    final scheduled = _formatTime(log["scheduledTime"] ?? "");
+    final date = _formatDate(log["scheduledTime"] ?? "");
+    final takenAt =
+        log["takenAt"] != null ? _formatTime(log["takenAt"]) : null;
+
+    return Container(
+      margin:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(children: [
+        CircleAvatar(
+          radius: 22,
+          backgroundColor: color.withOpacity(0.15),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15)),
+                const SizedBox(height: 3),
+                Text("Scheduled: $date at $scheduled",
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600)),
+                if (takenAt != null) ...[
+                  const SizedBox(height: 2),
+                  Text("Taken at: $takenAt",
+                      style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF27AE60))),
+                ],
+              ]),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            status[0].toUpperCase() + status.substring(1),
+            style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w600,
+                fontSize: 12),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ── PDF helper
+pw.Widget _pdfItem(String title, String value, PdfColor color) {
+  return pw.Expanded(
+    child: pw.Column(children: [
+      pw.Text(title,
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+      pw.SizedBox(height: 3),
+      pw.Text(value,
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(
+              fontSize: 11,
+              fontWeight: pw.FontWeight.bold,
+              color: color)),
+    ]),
+  );
 }

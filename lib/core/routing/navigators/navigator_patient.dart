@@ -22,7 +22,7 @@ class _NavigationScreenState extends State<NavigationnScreen> {
 
   List<Widget> pages = [
     HomeScreen(), // 0
-    Reportscreen(), // 1
+    PatientReportScreen(), // 1
     ChatsListScreenPatient(), //2
     // ChatScreen(), // 3
     DoctorSearchPage(),

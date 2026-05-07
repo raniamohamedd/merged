@@ -572,7 +572,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
   Widget _buildRecentPatients() {
     if (_stats == null || _stats!.patients.isEmpty) return const SizedBox();
 
-    final recent = _stats!.patients.take(4).toList();
+    final recent = _stats!.patients.take(10000000).toList();
 
     Color statusColor(String status) {
       switch (status) {
