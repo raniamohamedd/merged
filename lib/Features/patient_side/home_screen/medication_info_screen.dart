@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 
 class MedicationInfoScreen extends StatelessWidget {
-  const MedicationInfoScreen({super.key, required Map<String, dynamic> medication});
+  final Map<String, dynamic> medication;
+
+  const MedicationInfoScreen({
+    super.key,
+    required this.medication,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -13,7 +18,7 @@ class MedicationInfoScreen extends StatelessWidget {
         elevation: 0,
         iconTheme: IconThemeData(color: AppColors.blackColor),
         title: Text(
-          "Medication Info",
+          medication["name"] ?? "Medication Info",
           style: TextStyle(
               color: AppColors.blackColor, fontWeight: FontWeight.bold),
         ),
@@ -23,11 +28,21 @@ class MedicationInfoScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            infoCard("Medication Name", "Panadol"),
-            infoCard("Dosage", "500 mg"),
-            infoCard("Usage", "Pain relief and fever"),
-            infoCard("Side Effects", "Nausea, dizziness (rare)"),
-            infoCard("Warnings", "Do not exceed recommended dose"),
+            infoCard("Medication Name", medication["name"] ?? "-"),
+            infoCard("Dosage", medication["dosage"] ?? "-"),
+            infoCard("Frequency", medication["frequency"] ?? "-"),
+            infoCard("Reminder Time", medication["time"] ?? "-"),
+            infoCard(
+              "Side Effects",
+              (medication["sideEffects"] == null ||
+                      medication["sideEffects"].toString().trim().isEmpty)
+                  ? "No side effects recorded"
+                  : medication["sideEffects"].toString(),
+            ),
+            infoCard(
+              "Warning Level",
+              medication["warningLevel"] ?? "low",
+            ),
           ],
         ),
       ),

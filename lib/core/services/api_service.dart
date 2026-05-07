@@ -403,6 +403,26 @@ static Future<List<dynamic>> getMyMedications() async {
     throw Exception(data["message"] ?? "Failed to load medications");
   }
 }
+
+static Future<void> takeMedication(String medicationId) async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString("accessToken");
+
+  final response = await http.post(
+    Uri.parse("https://medpal-production-01b6.up.railway.app/medication/take/$medicationId"),
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer $token",
+    },
+  );
+
+  print("TAKE MED: ${response.statusCode} - ${response.body}");
+
+  if (response.statusCode != 200 && response.statusCode != 201) {
+    final data = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+    throw Exception(data["message"] ?? "Failed to mark medication as taken");
+  }
+}
 static Future<void> forceAddMedication({
   required String medicationName,
   required String dosage,

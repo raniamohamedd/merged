@@ -19,11 +19,11 @@ class DoseLogService {
   }
 
   static Future<void> saveOrUpdateDose({
-    required int medicationId,
+    required String medicationId,
     required String medicationName,
     required String dosage,
     required String scheduledTime,
-    required String status, // pending / taken / skipped / not_yet / missed
+    required String status,
   }) async {
     final logs = await getLogs();
 
@@ -53,7 +53,7 @@ class DoseLogService {
   }
 
   static Future<Map<String, dynamic>?> getDoseForToday({
-    required int medicationId,
+    required String medicationId,
     required String scheduledTime,
   }) async {
     final logs = await getLogs();

@@ -380,21 +380,26 @@ Future<void> _forceAddMedication({
     }
   }
 
-  void _refreshUpcomingReminders() {
-    upcomingReminders.clear();
-    for (final med in medications) {
-      if (med["reminderEnabled"] == true) {
-        final medFullName = "${med["name"]} ${med["dosage"]}";
-        final timeStr = med["time"]?.toString() ?? "";
-        if (timeStr.isEmpty) continue;
-        final times = _extractTimes(timeStr);
-        for (final t in times) {
-          upcomingReminders.add({"time": t, "medication": medFullName});
-        }
+void _refreshUpcomingReminders() {
+  upcomingReminders.clear();
+  for (final med in medications) {
+    if (med["reminderEnabled"] == true) {
+      final medFullName = "${med["name"]} ${med["dosage"]}";
+      final timeStr = med["time"]?.toString() ?? "";
+      if (timeStr.isEmpty) continue;
+      final times = _extractTimes(timeStr);
+      for (final t in times) {
+    upcomingReminders.add({
+  "time": t,
+  "medication": medFullName,
+  "medicationId": med["iddelete"] ?? med["id"].toString(),
+  "medicationName": med["name"] ?? "",
+  "dosage": med["dosage"] ?? "",
+});
       }
     }
   }
-
+}
   int _weekdayFromString(String day) {
     switch (day) {
       case "Monday": return DateTime.monday;
@@ -1249,8 +1254,7 @@ ScaffoldMessenger.of(context).showSnackBar(
   // ─── Dismissible Card ─────────────────────────────────────────────────────
   Widget dismissibleMedicationCard(Map<String, dynamic> med) {
     return Dismissible(
-      key: ValueKey("${med["id"]}_${med["name"]}"),
-      direction: DismissDirection.endToStart,
+key: ValueKey("${med["iddelete"] ?? med["id"] ?? med["name"]}_${med["name"]}"),      direction: DismissDirection.endToStart,
       background: Container(
         padding: const EdgeInsets.only(right: 20),
         alignment: Alignment.centerRight,

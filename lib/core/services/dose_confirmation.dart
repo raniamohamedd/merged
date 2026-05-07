@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
+import 'package:flutter_application_2/core/services/api_service.dart';
 import 'package:flutter_application_2/core/services/dose_log_services.dart';
 
 class DoseConfirmationScreen extends StatefulWidget {
-  final int medicationId;
+  final String medicationId;
   final String medicationName;
   final String dosage;
   final String scheduledTime;
@@ -42,34 +43,40 @@ class _DoseConfirmationScreenState extends State<DoseConfirmationScreen> {
     });
   }
 
-  Future<void> _saveStatus(String status) async {
-    setState(() {
-      isSaving = true;
-    });
+Future<void> _saveStatus(String status) async {
+  setState(() => isSaving = true);
 
-    await DoseLogService.saveOrUpdateDose(
-      medicationId: widget.medicationId,
-      medicationName: widget.medicationName,
-      dosage: widget.dosage,
-      scheduledTime: widget.scheduledTime,
-      status: status,
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      currentStatus = status;
-      isSaving = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Dose marked as $status"),
-        backgroundColor: AppColors.blueColor,
-      ),
-    );
+  // ✅ لو اتاخد → ابعت للـ API
+  if (status == "taken") {
+    try {
+      await ApiService.takeMedication(widget.medicationId);
+    } catch (e) {
+      print("Take medication API error: $e");
+    }
   }
 
+  await DoseLogService.saveOrUpdateDose(
+    medicationId: widget.medicationId,
+    medicationName: widget.medicationName,
+    dosage: widget.dosage,
+    scheduledTime: widget.scheduledTime,
+    status: status,
+  );
+
+  if (!mounted) return;
+
+  setState(() {
+    currentStatus = status;
+    isSaving = false;
+  });
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text("Dose marked as $status"),
+      backgroundColor: AppColors.blueColor,
+    ),
+  );
+}
   Widget _statusChip(String text, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -92,7 +99,6 @@ class _DoseConfirmationScreenState extends State<DoseConfirmationScreen> {
     final statusColor = switch (currentStatus) {
       "taken" => Colors.green,
       "skipped" => Colors.red,
-      "not_yet" => Colors.orange,
       _ => Colors.grey,
     };
 
@@ -154,7 +160,10 @@ class _DoseConfirmationScreenState extends State<DoseConfirmationScreen> {
                               borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                          onPressed: () => _saveStatus("taken"),
+                          onPressed: () {_saveStatus("taken");
+                                              Navigator.pop(context);
+
+                          } ,
                           child: const Text(
                             "Taken",
                             style: TextStyle(color: Colors.white),
@@ -172,7 +181,9 @@ class _DoseConfirmationScreenState extends State<DoseConfirmationScreen> {
                               borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                          onPressed: () => _saveStatus("not_yet"),
+                          onPressed: () { _saveStatus("not_yet");
+                                              Navigator.pop(context);}
+,
                           child: const Text(
                             "Not yet",
                             style: TextStyle(color: Colors.white),

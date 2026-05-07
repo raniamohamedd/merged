@@ -38,12 +38,12 @@ tz.setLocalLocation(tz.getLocation('Africa/Cairo'));
           if (data["type"] == "dose_confirmation") {
             navigatorKey?.currentState?.push(
               MaterialPageRoute(
-                builder: (_) => DoseConfirmationScreen(
-                  medicationId: data["medicationId"] as int,
-                  medicationName: data["medicationName"] as String,
-                  dosage: data["dosage"] as String,
-                  scheduledTime: data["scheduledTime"] as String,
-                ),
+               builder: (_) => DoseConfirmationScreen(
+  medicationId: data["medicationId"]?.toString() ?? "",
+  medicationName: data["medicationName"]?.toString() ?? "",
+  dosage: data["dosage"]?.toString() ?? "",
+  scheduledTime: data["scheduledTime"]?.toString() ?? "",
+),
               ),
             );
           }
