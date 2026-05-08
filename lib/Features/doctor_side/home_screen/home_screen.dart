@@ -84,6 +84,8 @@ class HomeScreenD extends StatelessWidget {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(10.0),
           child: Column(
+                  mainAxisSize: MainAxisSize.max,  // ← أضف السطر ده
+
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 5),
@@ -125,7 +127,7 @@ class HomeScreenD extends StatelessWidget {
                   final appointment = upcomingAppointments.first;
 
                   return Container(
-                    width: double.maxFinite,
+                    width: double.infinity,
                     decoration: BoxDecoration(
                       borderRadius:
                       const BorderRadius.all(Radius.circular(20)),
@@ -175,7 +177,7 @@ class HomeScreenD extends StatelessWidget {
                           ),
                           const SizedBox(height: 15),
                           Container(
-                            width: double.maxFinite,
+                            width: double.infinity,
                             decoration: BoxDecoration(
                               borderRadius:
                               const BorderRadius.all(Radius.circular(15)),

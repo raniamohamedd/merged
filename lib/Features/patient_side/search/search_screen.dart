@@ -1,9 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/Features/doctor_side/screens/doctorProfile2.dart';
 import 'package:flutter_application_2/Features/doctor_side/screens/doctorsProfile.dart';
 import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
 
+// ─────────────────────────────────────────────
+// Doctor Model
+// ─────────────────────────────────────────────
 class Doctor {
   final String id;
   final String name;
@@ -13,7 +17,8 @@ class Doctor {
   final double rating;
   final bool available;
   final bool verified;
-  final Map<String, dynamic> rawData; // ← أضف ده
+  final bool isMyDoctor; // ✅ جديد
+  final Map<String, dynamic> rawData;
 
   Doctor({
     required this.id,
@@ -24,25 +29,29 @@ class Doctor {
     required this.rating,
     required this.available,
     required this.verified,
-    required this.rawData, // ← أضف ده
+    required this.isMyDoctor, // ✅ جديد
+    required this.rawData,
   });
 
-  factory Doctor.fromJson(Map<String, dynamic> json) {
-    final user = json['userId'] ?? {};
-    return Doctor(
-      id: (user['_id'] ?? user['id'] ?? '').toString(), // ← _id مش id
-      name: (user['fullName'] ?? 'Unknown Doctor').toString(),
-      specialty: (json['specialization'] ?? 'General').toString(),
-      location: (json['clinicLocation'] ?? 'Unknown Location').toString(),
-      experience: int.tryParse((json['experienceYears'] ?? '0').toString()) ?? 0,
-      rating: 0.0,
-      available: true,
-      verified: json['isVerified'] ?? false,
-      rawData: json, // ← احتفظ بالـ raw data كامل
-    );
-  }
+factory Doctor.fromJson(Map<String, dynamic> json) {
+  final user = (json['userId'] is Map) ? json['userId'] as Map<String, dynamic> : {};
+  return Doctor(
+    id: (user['_id'] ?? user['id'] ?? json['_id'] ?? '').toString(),
+    name: (user['fullName'] ?? 'Unknown Doctor').toString(),
+    specialty: (json['specialization'] ?? 'General').toString(),
+    location: (json['clinicLocation'] ?? 'Unknown Location').toString(),
+    experience: int.tryParse((json['experienceYears'] ?? '0').toString()) ?? 0,
+    rating: 0.0,
+    available: true,
+    verified: json['isVerified'] ?? false,
+    rawData: json, isMyDoctor: json['isMyDoctor'] ?? false,
+  );
+}
 }
 
+// ─────────────────────────────────────────────
+// Search Page
+// ─────────────────────────────────────────────
 class DoctorSearchPage extends StatefulWidget {
   const DoctorSearchPage({super.key});
 
@@ -59,12 +68,22 @@ class _DoctorSearchPageState extends State<DoctorSearchPage> {
   String filterSpecialty = '';
   String filterAvailability = 'all';
   double? filterMinRating;
+
+  // ✅ بتتملى تلقائياً من isMyDoctor في الـ API response
   Set<String> requestedDoctors = {};
+
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     fetchDoctors();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> fetchDoctors() async {
@@ -78,6 +97,11 @@ class _DoctorSearchPageState extends State<DoctorSearchPage> {
 
       setState(() {
         allDoctors = doctors;
+        // ✅ الدكاترة اللي isMyDoctor = true بيتحطوا في requestedDoctors تلقائياً
+        requestedDoctors = doctors
+            .where((d) => d.isMyDoctor)
+            .map((d) => d.id)
+            .toSet();
         isLoading = false;
       });
     } catch (e) {
@@ -95,8 +119,12 @@ class _DoctorSearchPageState extends State<DoctorSearchPage> {
     return allDoctors.where((doctor) {
       final matchesQuery =
           doctor.name.toLowerCase().contains(searchQuery.toLowerCase()) ||
-          doctor.specialty.toLowerCase().contains(searchQuery.toLowerCase()) ||
-          doctor.location.toLowerCase().contains(searchQuery.toLowerCase());
+              doctor.specialty
+                  .toLowerCase()
+                  .contains(searchQuery.toLowerCase()) ||
+              doctor.location
+                  .toLowerCase()
+                  .contains(searchQuery.toLowerCase());
 
       final matchesSpecialty =
           filterSpecialty.isEmpty ? true : doctor.specialty == filterSpecialty;
@@ -118,19 +146,23 @@ class _DoctorSearchPageState extends State<DoctorSearchPage> {
   }
 
   void sendRequest(String doctorId) {
+    // ✅ أضفه في requestedDoctors على طول عشان الـ UI يتحدث فوراً
     setState(() {
       requestedDoctors.add(doctorId);
     });
-    // إرسال طلب الاتصال بالطبيب
+
     ApiService.sendContactRequest(doctorId).then((response) {
-      // إذا تم الإرسال بنجاح
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Connection has been sent'),
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('✅ Connection request sent'),
         backgroundColor: Colors.green,
       ));
     }).catchError((e) {
+      // ✅ لو فشل، ارجع الحالة
+      setState(() {
+        requestedDoctors.remove(doctorId);
+      });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Connection not sent $e'),
+        content: Text('❌ Failed to send request: $e'),
         backgroundColor: Colors.red,
       ));
     });
@@ -179,8 +211,9 @@ class _DoctorSearchPageState extends State<DoctorSearchPage> {
                 selectedColor: AppColors.blueColor,
                 backgroundColor: Colors.grey.shade200,
                 labelStyle: TextStyle(
-                  color:
-                      filterSpecialty == specialty ? Colors.white : Colors.black87,
+                  color: filterSpecialty == specialty
+                      ? Colors.white
+                      : Colors.black87,
                   fontWeight: FontWeight.w600,
                 ),
                 shape: RoundedRectangleBorder(
@@ -193,7 +226,8 @@ class _DoctorSearchPageState extends State<DoctorSearchPage> {
                 ),
                 onSelected: (_) {
                   setState(() {
-                    filterSpecialty = specialty;
+                    filterSpecialty =
+                        filterSpecialty == specialty ? '' : specialty;
                   });
                 },
               ),
@@ -204,103 +238,250 @@ class _DoctorSearchPageState extends State<DoctorSearchPage> {
     );
   }
 
+  Widget _buildDoctorCard(Doctor doctor) {
+    // ✅ بيشيل من requestedDoctors أو من isMyDoctor
+    final isRequested =
+        requestedDoctors.contains(doctor.id) || doctor.isMyDoctor;
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DoctorPublicProfileScreen2(doctor: doctor),
+          ),
+        );
+      },
+      child: Card(
+        color: Colors.white,
+        margin: const EdgeInsets.only(bottom: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Name + Verified
+        Row(
+  children: [
+    // ── صورة الدكتور ──────────────────────────
+    // Builder(
+    //   builder: (_) {
+    //     final raw = doctor.rawData;final imageUrl = raw['proofDocument']?['secure_url']?.toString() ?? '';
+    //    return CircleAvatar(
+    //       radius: 28,
+    //       backgroundColor: AppColors.blueColor.withOpacity(0.1),
+    //       backgroundImage: imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
+    //       child: imageUrl.isEmpty
+    //           ? Icon(Icons.person, color: AppColors.blueColor, size: 28)
+    //           : null,
+    //     );
+    //   },
+    // ),
+    const SizedBox(width: 12),
+    // ── اسم + verified ────────────────────────
+    Expanded(
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Dr ${doctor.name}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        if (doctor.verified)
+                          const Icon(
+                            Icons.verified_user,
+                            color: Colors.blue,
+                            size: 18,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(doctor.specialty),
+              const SizedBox(height: 16),
+
+              // ── Location
+              Row(
+                children: [
+                  const Icon(Icons.location_on_outlined, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      doctor.location,
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+
+              // ── Experience
+              Row(
+                children: [
+                  const Icon(Icons.access_time, size: 20),
+                  const SizedBox(width: 10),
+                  Text(
+                    "Experience: ${doctor.experience} years",
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+
+              // ── Rating
+              Row(
+                children: [
+                  const Icon(Icons.star_outline, size: 20),
+                  const SizedBox(width: 10),
+                  Text(
+                    "Rating: ${doctor.rating}/5",
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // ── Send Request Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: isRequested
+                      ? const Icon(Icons.check, color: Colors.white)
+                      : const Icon(Icons.person_add, color: Colors.white),
+                  label: Text(
+                    isRequested ? "Accepted" : "Send Connection Request",
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  // ✅ المشكلة كانت هنا — دلوقتي بيشيك على isRequested بدل available
+                  onPressed: isRequested ? null : () => sendRequest(doctor.id),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        isRequested ? Colors.grey : AppColors.blueColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 249, 249, 249),
+      backgroundColor: const Color(0xFFF2F6FB),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        title:  Text(
+          "Find a Doctor",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: AppColors.blueColor,
+          ),
+        ),
+      ),
       body: Padding(
-        padding: const EdgeInsets.only(left: 20, right: 20, top: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 37),
-            Text(
-              "Search Doctor",
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: AppColors.blueColor,
+            // ── Search Bar
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 30),
-
-            Card(
-              color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        decoration: InputDecoration(
-                          hintText: "Search doctor or specialty",
-                          prefixIcon: const Icon(CupertinoIcons.search),
-                          filled: true,
-                          fillColor: AppColors.greyColor.withOpacity(0.08),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(15),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        onChanged: (val) {
-                          setState(() {
-                            searchQuery = val;
-                          });
-                        },
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (v) => setState(() => searchQuery = v),
+                      decoration: InputDecoration(
+                        hintText: "Search by name, specialty or location...",
+                        prefixIcon: const Icon(CupertinoIcons.search,
+                            color: Colors.grey),
+                        border: InputBorder.none,
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 14),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: () {},
+                  ),
+                  if (searchQuery.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.clear, color: Colors.grey),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => searchQuery = '');
+                      },
+                    ),
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    child: ElevatedButton(
+                      onPressed: () => setState(() {}),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.blueColor,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 16,
-                          horizontal: 20,
-                        ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
+                          borderRadius: BorderRadius.circular(12),
                         ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                       ),
                       child: const Text(
                         "Search",
                         style: TextStyle(color: Colors.white),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
 
             const SizedBox(height: 14),
 
+            // ── Specialty Filters
             if (!isLoading && allDoctors.isNotEmpty) ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "Filter by Specialty",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.blueColor,
-                    fontSize: 15,
-                  ),
+              Text(
+                "Filter by Specialty",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.blueColor,
+                  fontSize: 15,
                 ),
               ),
               const SizedBox(height: 10),
               buildSpecialtyFilters(),
               const SizedBox(height: 14),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "${filteredDoctors.length} doctors found",
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
+              Text(
+                "${filteredDoctors.length} doctors found",
+                style: const TextStyle(fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 8),
             ],
 
+            // ── Doctor List
             Expanded(
               child: isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -328,121 +509,8 @@ class _DoctorSearchPageState extends State<DoctorSearchPage> {
                               child: ListView.builder(
                                 itemCount: filteredDoctors.length,
                                 itemBuilder: (context, index) {
-                                  final doctor = filteredDoctors[index];
-                                  final isRequested =
-                                      requestedDoctors.contains(doctor.id);return GestureDetector(
-  onTap: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DoctorPublicProfileScreen(doctor: doctor),
-      ),
-    );
-  },
-  child: Card(
-    color: Colors.white,
-    margin: const EdgeInsets.only(bottom: 12),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(18),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Dr ${doctor.name}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    if (doctor.verified)
-                      const Icon(
-                        Icons.verified_user,
-                        color: Colors.blue,
-                        size: 18,
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(doctor.specialty),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              const Icon(Icons.location_on_outlined, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  doctor.location,
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              const Icon(Icons.access_time, size: 20),
-              const SizedBox(width: 10),
-              Text(
-                "Experience: ${doctor.experience} years",
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              const Icon(Icons.star_outline, size: 20),
-              const SizedBox(width: 10),
-              Text(
-                "Rating: ${doctor.rating}/5",
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              icon: isRequested
-                  ? const Icon(Icons.check, color: Colors.grey)
-                  : const Icon(Icons.person_add, color: Colors.white),
-              label: Text(
-                isRequested ? "Request Sent" : "Send Connection Request",
-                style: isRequested
-                    ? const TextStyle(color: Colors.grey)
-                    : const TextStyle(color: Colors.white),
-              ),
-              onPressed: doctor.available && !isRequested
-                  ? () => sendRequest(doctor.id)
-                  : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: doctor.available && !isRequested
-                    ? AppColors.blueColor
-                    : Colors.grey,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  ),
-);
+                                  return _buildDoctorCard(
+                                      filteredDoctors[index]);
                                 },
                               ),
                             ),

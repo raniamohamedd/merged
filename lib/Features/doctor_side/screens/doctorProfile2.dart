@@ -3,18 +3,18 @@ import 'package:flutter_application_2/core/constants/colors.dart';
 import 'package:flutter_application_2/core/services/api_service.dart';
 import 'package:flutter_application_2/Features/patient_side/search/search_screen.dart';
 
-class DoctorPublicProfileScreen extends StatefulWidget {
+class DoctorPublicProfileScreen2 extends StatefulWidget {
   final Doctor doctor;
 
-  const DoctorPublicProfileScreen({super.key, required this.doctor});
+  const DoctorPublicProfileScreen2({super.key, required this.doctor});
 
   @override
-  State<DoctorPublicProfileScreen> createState() =>
+  State<DoctorPublicProfileScreen2> createState() =>
       _DoctorPublicProfileScreenState();
 }
 
 class _DoctorPublicProfileScreenState
-    extends State<DoctorPublicProfileScreen> {
+    extends State<DoctorPublicProfileScreen2> {
   bool isRequesting = false;
   bool requestSent = false;
   bool isAlreadyConnected = false; // ← أضف الـ variable ده
@@ -64,14 +64,13 @@ class _DoctorPublicProfileScreenState
   Widget build(BuildContext context) {
     final doc = widget.doctor;
     final raw = doc.rawData;
-final imageUrl = raw['userId']?['image']?['secure_url']?.toString() ?? '';
-
+final imageUrl = raw['proofDocument']?['secure_url']?.toString() ?? '';
     return Scaffold(
       backgroundColor: const Color(0xFFF7FAFC),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 220,
+            expandedHeight: 120,
             pinned: true,
             backgroundColor: AppColors.blueColor,
             leading: IconButton(
@@ -91,19 +90,19 @@ final imageUrl = raw['userId']?['image']?['secure_url']?.toString() ?? '';
                   ),
                 ),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     const SizedBox(height: 50),
-                    CircleAvatar(
-                      radius: 48,
-                      backgroundColor: Colors.white.withOpacity(0.2),
-                     backgroundImage: imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
-                      child: imageUrl.isEmpty
-                          ? const Icon(Icons.person,
-                              color: Colors.white, size: 48)
-                          : null,
-                    ),
-                    const SizedBox(height: 10),
+                    // CircleAvatar(
+                    //   radius: 48,
+                    //   backgroundColor: Colors.white.withOpacity(0.2),
+                    //  backgroundImage: imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
+                    //   child: imageUrl.isEmpty
+                    //       ? const Icon(Icons.person,
+                    //           color: Colors.white, size: 48)
+                    //       : null,
+                    // ),
+                    // const SizedBox(height: 10),
                     Text(
                       "Dr. ${doc.name}",
                       style: const TextStyle(
@@ -116,6 +115,8 @@ final imageUrl = raw['userId']?['image']?['secure_url']?.toString() ?? '';
                       style: const TextStyle(
                           color: Colors.white70, fontSize: 14),
                     ),
+                                        const SizedBox(height: 20),
+
                   ],
                 ),
               ),

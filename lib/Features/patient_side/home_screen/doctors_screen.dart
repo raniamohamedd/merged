@@ -22,24 +22,25 @@ class _MyDoctorsScreenState extends State<MyDoctorsScreen> {
     _loadDoctors();
   }
 
-  Future<void> _loadDoctors() async {
+Future<void> _loadDoctors() async {
+  setState(() {
+    isLoading = true;
+    error = null;
+  });
+  try {
+    final data = await ApiService.getmydoctors();
+    print('🔍 SAMPLE DOC: ${data.isNotEmpty ? data[0] : "empty"}'); // ← أضف ده
     setState(() {
-      isLoading = true;
-      error = null;
+      doctors = (data as List).map((e) => Doctor.fromJson(e)).toList();
+      isLoading = false;
     });
-    try {
-      final data = await ApiService.getmydoctors();
-      setState(() {
-        doctors = (data as List).map((e) => Doctor.fromJson(e)).toList();
-        isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        error = e.toString();
-        isLoading = false;
-      });
-    }
+  } catch (e) {
+    setState(() {
+      error = e.toString();
+      isLoading = false;
+    });
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -169,11 +170,10 @@ class _DoctorCard extends StatelessWidget {
     final color = _specialtyColors[index % _specialtyColors.length];
     final iconData =
         _specialtyIcons[doctor.specialty] ?? Icons.medical_services_rounded;
-
-    final raw = doctor.rawData;
+final raw = doctor.rawData;
 String imageUrl = raw['userId']?['image']?['secure_url']?.toString() ?? '';
 if (imageUrl.isEmpty) {
-  imageUrl = raw['image']?['secure_url']?.toString() ?? '';
+  imageUrl = raw['proofDocument']?['secure_url']?.toString() ?? '';
 }
 
     return GestureDetector(

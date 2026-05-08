@@ -844,175 +844,181 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
             ),
 
             // ── Body ────────────────────────────
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _error != null
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+      Expanded(
+  child: _isLoading
+      ? const Center(child: CircularProgressIndicator())
+      : _error != null
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline,
+                      size: 48, color: Colors.red),
+                  const SizedBox(height: 12),
+                  const Text("Failed to load data",
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text(_error!,
+                      textAlign: TextAlign.center,
+                      style:
+                          TextStyle(color: Colors.grey.shade600)),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: _loadDashboardData,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text("Retry"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.blueColor,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : LayoutBuilder(
+              builder: (context, constraints) => RefreshIndicator(
+                onRefresh: _loadDashboardData,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding:
+                      const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: Column(
+                      children: [
+                        // ── KPI Cards 2×2 ─────────────────────
+                        GridView.count(
+                          shrinkWrap: true,
+                          physics:
+                              const NeverScrollableScrollPhysics(),
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          mainAxisExtent: 100,
+                          children: [
+                            _kpiCard(
+                              icon: Icons.people,
+                              label: "Total Patients",
+                              value: _stats!.totalPatients.toString(),
+                              color: AppColors.blueColor,
+                            ),
+                            _kpiCard(
+                              icon: Icons.favorite_border,
+                              label: "Stable Patients",
+                              value: _stats!.stableCount.toString(),
+                              color: Colors.green,
+                            ),
+                            _kpiCard(
+                              icon: Icons.warning_amber_rounded,
+                              label: "Emergency Alerts",
+                              value:
+                                  _stats!.emergencyAlerts.toString(),
+                              color: Colors.red,
+                            ),
+                            _kpiCard(
+                              icon: Icons.monitor_heart,
+                              label: "Monitoring",
+                              value:
+                                  _stats!.monitoringCount.toString(),
+                              color: Colors.orange,
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // ── KPI Row: Meds ──────────────────────
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _miniKpi(
+                                icon: Icons.medication_rounded,
+                                label: "Active Meds",
+                                value: _stats!.totalMedications
+                                    .toString(),
+                                color: const Color(0xFF7B1FA2),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _miniKpi(
+                                icon: Icons.check_circle_rounded,
+                                label: "Taken",
+                                value: _stats!.totalTaken.toString(),
+                                color: Colors.green,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _miniKpi(
+                                icon: Icons.cancel_rounded,
+                                label: "Missed",
+                                value: _stats!.totalMissed.toString(),
+                                color: Colors.red,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _miniKpi(
+                                icon: Icons.report_problem_rounded,
+                                label: "Warning",
+                                value: _stats!.warningMeds.toString(),
+                                color: const Color(0xFFFF8F00),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        // ── Charts ────────────────────────────
+                        if (isMobile) ...[
+                          _buildAdherenceChart(),
+                          const SizedBox(height: 16),
+                          _buildDosesChart(),
+                          const SizedBox(height: 16),
+                          _buildRecentPatients(),
+                          const SizedBox(height: 16),
+                          _buildPieChartCard(),
+                          const SizedBox(height: 16),
+                        ] else ...[
+                          Row(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.error_outline,
-                                  size: 48, color: Colors.red),
-                              const SizedBox(height: 12),
-                              const Text("Failed to load data",
-                                  style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 8),
-                              Text(_error!,
-                                  textAlign: TextAlign.center,
-                                  style:
-                                      TextStyle(color: Colors.grey.shade600)),
-                              const SizedBox(height: 16),
-                              ElevatedButton.icon(
-                                onPressed: _loadDashboardData,
-                                icon: const Icon(Icons.refresh),
-                                label: const Text("Retry"),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.blueColor,
-                                  foregroundColor: Colors.white,
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    _buildAdherenceChart(),
+                                    const SizedBox(height: 16),
+                                    _buildDosesChart(),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    _buildRecentPatients(),
+                                    const SizedBox(height: 16),
+                                    _buildPieChartCard(),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                        )
-                      : RefreshIndicator(
-                          onRefresh: _loadDashboardData,
-                          child: SingleChildScrollView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            padding:
-                                const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                            child: Column(
-                              children: [
-                                // ── KPI Cards 2×2 ─────────────────────
-                                GridView.count(
-                                  shrinkWrap: true,
-                                  physics:
-                                      const NeverScrollableScrollPhysics(),
-                                  crossAxisCount: 2,
-                                  mainAxisSpacing: 12,
-                                  crossAxisSpacing: 12,
-                                  mainAxisExtent: 100,
-                                  children: [
-                                    _kpiCard(
-                                      icon: Icons.people,
-                                      label: "Total Patients",
-                                      value: _stats!.totalPatients.toString(),
-                                      color: AppColors.blueColor,
-                                    ),
-                                    _kpiCard(
-                                      icon: Icons.favorite_border,
-                                      label: "Stable Patients",
-                                      value: _stats!.stableCount.toString(),
-                                      color: Colors.green,
-                                    ),
-                                    _kpiCard(
-                                      icon: Icons.warning_amber_rounded,
-                                      label: "Emergency Alerts",
-                                      value:
-                                          _stats!.emergencyAlerts.toString(),
-                                      color: Colors.red,
-                                    ),
-                                    _kpiCard(
-                                      icon: Icons.monitor_heart,
-                                      label: "Monitoring",
-                                      value:
-                                          _stats!.monitoringCount.toString(),
-                                      color: Colors.orange,
-                                    ),
-                                  ],
-                                ),
-
-                                const SizedBox(height: 16),
-
-                                // ── KPI Row: Meds ──────────────────────
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _miniKpi(
-                                        icon: Icons.medication_rounded,
-                                        label: "Active Meds",
-                                        value: _stats!.totalMedications
-                                            .toString(),
-                                        color: const Color(0xFF7B1FA2),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: _miniKpi(
-                                        icon: Icons.check_circle_rounded,
-                                        label: "Taken",
-                                        value: _stats!.totalTaken.toString(),
-                                        color: Colors.green,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: _miniKpi(
-                                        icon: Icons.cancel_rounded,
-                                        label: "Missed",
-                                        value: _stats!.totalMissed.toString(),
-                                        color: Colors.red,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: _miniKpi(
-                                        icon: Icons.report_problem_rounded,
-                                        label: "Warning",
-                                        value: _stats!.warningMeds.toString(),
-                                        color: const Color(0xFFFF8F00),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-
-                                const SizedBox(height: 18),
-
-                                // ── Charts ────────────────────────────
-                                if (isMobile) ...[
-                                  _buildAdherenceChart(),
-                                  const SizedBox(height: 16),
-                                  _buildDosesChart(),
-                                  const SizedBox(height: 16),
-                                  _buildRecentPatients(),
-                                  const SizedBox(height: 16),
-                                  _buildPieChartCard(),
-                                  const SizedBox(height: 16),
-                                ] else ...[
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          children: [
-                                            _buildAdherenceChart(),
-                                            const SizedBox(height: 16),
-                                            _buildDosesChart(),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Column(
-                                          children: [
-                                            _buildRecentPatients(),
-                                            const SizedBox(height: 16),
-                                            _buildPieChartCard(),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ],
+),    ],
         ),
       ),
     );
